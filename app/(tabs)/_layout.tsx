@@ -1,135 +1,66 @@
-import { supabase } from '@/lib/supabase'; // FIXED: Use @/ alias instead of ../
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Stack, usePathname, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+// app/(tabs)/_layout.tsx
+import { Ionicons } from '@expo/vector-icons';
+import { Tabs } from 'expo-router';
+import { Platform } from 'react-native';
 
-export default function RootLayout() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const [isReady, setIsReady] = useState(false);
-  const [isChecking, setIsChecking] = useState(true);
-
-  useEffect(() => {
-    checkInitialRoute();
-  }, []);
-
-  useEffect(() => {
-    // Handle routing after initial check is complete
-    if (isReady && !isChecking) {
-      handleRouting();
-    }
-  }, [isReady, isChecking, pathname]);
-
-  async function checkInitialRoute() {
-    try {
-      console.log('🔍 Checking initial route...');
-      console.log('📍 Current pathname:', pathname);
-      
-      // Check if user has selected fishing type
-      const fishingType = await AsyncStorage.getItem('fishingType');
-      console.log('🎣 Stored fishing type:', fishingType);
-      
-      // Check if user is authenticated
-      const { data: { session }, error } = await supabase.auth.getSession();
-      console.log('👤 Session exists:', !!session);
-      
-      if (error) {
-        console.error('❌ Session check error:', error);
-      }
-      
-      setIsReady(true);
-      setIsChecking(false);
-      
-    } catch (error) {
-      console.error('💥 Error checking initial route:', error);
-      setIsReady(true);
-      setIsChecking(false);
-    }
-  }
-
-  async function handleRouting() {
-    try {
-      const fishingType = await AsyncStorage.getItem('fishingType');
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      // Don't redirect if already on the correct page
-      if (pathname === '/welcome' && !fishingType) {
-        return; // Already where we need to be
-      }
-      
-      if (pathname.includes('(tabs)') && fishingType && session) {
-        return; // Already in the app with everything set up
-      }
-      
-      // Perform redirects
-      if (!fishingType) {
-        console.log('➡️ No fishing type selected, going to welcome');
-        router.replace('/welcome');
-      } else if (fishingType && session) {
-        console.log('➡️ User authenticated with fishing type, going to app');
-        if (!pathname.includes('(tabs)')) {
-          router.replace('/(tabs)/feeds');
-        }
-      } else if (fishingType && !session) {
-        console.log('➡️ Has fishing type but no session, going to profile to sign in');
-        if (!pathname.includes('(tabs)')) {
-          router.replace('/(tabs)/profile');
-        }
-      }
-    } catch (error) {
-      console.error('💥 Error in handleRouting:', error);
-    }
-  }
-
-  // Set up auth state listener
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('🔄 Auth state changed:', event);
-        
-        if (event === 'SIGNED_IN' && session) {
-          const fishingType = await AsyncStorage.getItem('fishingType');
-          if (fishingType && pathname === '/welcome') {
-            router.replace('/(tabs)/feeds');
-          }
-        } else if (event === 'SIGNED_OUT') {
-          // Optionally clear fishing type on sign out
-          // await AsyncStorage.removeItem('fishingType');
-          // router.replace('/welcome');
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, [pathname]);
-
-  // Don't render anything until we know where to route
-  if (!isReady || isChecking) {
-    return null;
-  }
-
+export default function TabsLayout() {
   return (
-    <Stack
+    <Tabs
       screenOptions={{
         headerShown: false,
-        animation: 'fade',
-        contentStyle: { backgroundColor: '#0B1220' }
+        tabBarActiveTintColor: '#ffffff',
+        tabBarInactiveTintColor: '#8A94A6',
+        tabBarStyle: {
+          backgroundColor: '#0B1220',
+          borderTopColor: 'rgba(255,255,255,0.08)',
+          height: Platform.select({ ios: 90, android: 70 }),
+          paddingTop: 6,
+          paddingBottom: Platform.select({ ios: 24, android: 10 }),
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+          marginBottom: 4,
+        },
+        tabBarIconStyle: { marginTop: 4 },
       }}
     >
-      <Stack.Screen 
-        name="welcome" 
-        options={{ 
-          headerShown: false,
-          animation: 'fade'
-        }} 
+      <Tabs.Screen
+        name="feeds"
+        options={{
+          title: 'Feeds',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="list-outline" color={color} size={size} />
+          ),
+        }}
       />
-      <Stack.Screen 
-        name="(tabs)" 
-        options={{ 
-          headerShown: false,
-          animation: 'slide_from_right'
-        }} 
+      <Tabs.Screen
+        name="home"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home-outline" color={color} size={size} />
+          ),
+        }}
       />
-    </Stack>
+      <Tabs.Screen
+        name="map"
+        options={{
+          title: 'Map',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="map-outline" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-circle-outline" color={color} size={size} />
+          ),
+        }}
+      />
+    </Tabs>
   );
 }
