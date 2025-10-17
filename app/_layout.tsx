@@ -2,7 +2,6 @@
 import { FishingProvider } from '@/contexts/FishingContext';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Href } from 'expo-router';
 import { Stack, usePathname, useRouter, useSegments } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -11,13 +10,11 @@ export default function RootLayout() {
   const pathname = usePathname();
   const segments = useSegments();
 
-  // Are we currently inside the (tabs) group?
   const inTabs = useMemo(() => segments[0] === '(tabs)', [segments]);
 
   const [isReady, setIsReady] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
-  // Initial check (runs once)
   useEffect(() => {
     (async () => {
       try {
@@ -39,11 +36,9 @@ export default function RootLayout() {
     })();
   }, []);
 
-  // Routing logic (runs when state ready or path/group changes)
   useEffect(() => {
     if (!isReady || isChecking) return;
     void handleRouting();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isReady, isChecking, pathname, inTabs]);
 
   async function handleRouting() {
@@ -53,40 +48,39 @@ export default function RootLayout() {
         data: { session },
       } = await supabase.auth.getSession();
 
-      // Decide target:
-      // - No fishing type → /welcome
-      // - Has type + signed in → feeds
-      // - Has type + not signed in → profile
-      let target: Href | null = null;
-
-      if (!fishingType) {
-        console.log('➡️ No type → welcome');
-        target = '/welcome';
-      } else if (session) {
-        console.log('➡️ Type + session → feeds');
-        target = inTabs ? '/feeds' : '/(tabs)/feeds';
-      } else {
-        console.log('➡️ Type + NO session → profile');
-        target = inTabs ? '/profile' : '/(tabs)/profile';
-      }
-
-      if (!target || pathname === target) return;
-
-      // If we need to go to /welcome but we’re currently inside tabs,
-      // bounce through root so the navigator tree can change cleanly.
-      if (target === '/welcome' && inTabs) {
-        router.replace('/');
-        setTimeout(() => router.replace('/welcome'), 0);
+      // If we're not in tabs and have no fishing type, don't do anything
+      // Let index.tsx handle the redirect to welcome
+      if (!fishingType && !inTabs) {
+        console.log('➡️ No type, not in tabs → let index.tsx handle it');
         return;
       }
-
-      router.replace(target);
+      
+      // If in tabs and have type, navigate appropriately
+      if (inTabs && fishingType) {
+        if (session) {
+          console.log('➡️ In tabs, has type + session → feeds');
+          if (pathname !== '/feeds' && pathname !== '/(tabs)/feeds') {
+            router.replace('/feeds');
+          }
+        } else {
+          console.log('➡️ In tabs, has type, no session → profile');
+          if (pathname !== '/profile' && pathname !== '/(tabs)/profile') {
+            router.replace('/profile');
+          }
+        }
+      }
+      
+      // If we're in tabs but no fishing type, something's wrong - go back to welcome
+      if (inTabs && !fishingType) {
+        console.log('➡️ In tabs but no type → back to welcome');
+        router.replace('/welcome');
+      }
+      
     } catch (error) {
       console.error('💥 Error in handleRouting:', error);
     }
   }
 
-  // Auth state listener (e.g., after login)
   useEffect(() => {
     const {
       data: { subscription },
@@ -95,7 +89,6 @@ export default function RootLayout() {
       if (event === 'SIGNED_IN' && session) {
         const type = await AsyncStorage.getItem('fishingType');
         if (type) {
-          // Go to feeds, using the right path form for current tree
           router.replace(inTabs ? '/feeds' : '/(tabs)/feeds');
         }
       }
@@ -108,7 +101,6 @@ export default function RootLayout() {
     };
   }, [inTabs, router]);
 
-  // Don’t render until we know where to route
   if (!isReady || isChecking) return null;
 
   return (
@@ -123,6 +115,10 @@ export default function RootLayout() {
         <Stack.Screen
           name="welcome"
           options={{ headerShown: false, animation: 'fade' }}
+        />
+        <Stack.Screen
+          name="index"
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="(tabs)"

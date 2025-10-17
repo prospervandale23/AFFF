@@ -12,9 +12,6 @@ interface SimpleProfile {
   age: string;
   location: string;
   tackle_categories: string[];
-  rod: string;
-  reel: string;
-  line: string;
   experience_level: 'Beginner' | 'Intermediate' | 'Advanced' | null;
   has_boat: boolean;
   boat_type: string;
@@ -23,13 +20,6 @@ interface SimpleProfile {
   favorite_species: string[];
   profile_photo_url: string;
   preferred_fishing_times: string[];
-  tackle_details: {
-    lures: string;
-    bait: string;
-    hooks: string;
-    weights: string;
-    other_gear: string;
-  };
   fishing_type: 'freshwater' | 'saltwater' | null;
 }
 
@@ -43,9 +33,6 @@ export default function ProfileScreen() {
     age: '',
     location: '',
     tackle_categories: [],
-    rod: '',
-    reel: '',
-    line: '',
     experience_level: null,
     has_boat: false,
     boat_type: '',
@@ -54,13 +41,6 @@ export default function ProfileScreen() {
     favorite_species: [],
     profile_photo_url: '',
     preferred_fishing_times: [],
-    tackle_details: {
-      lures: '',
-      bait: '',
-      hooks: '',
-      weights: '',
-      other_gear: ''
-    },
     fishing_type: fishingType
   });
   
@@ -188,9 +168,6 @@ export default function ProfileScreen() {
           age: data.age?.toString() || '',
           location: data.location || '',
           tackle_categories: data.tackle_categories || [],
-          rod: data.rod || '',
-          reel: data.reel || '',
-          line: data.line || '',
           experience_level: data.experience_level,
           has_boat: data.has_boat || false,
           boat_type: data.boat_type || '',
@@ -199,13 +176,6 @@ export default function ProfileScreen() {
           favorite_species: data.favorite_species || [],
           profile_photo_url: data.profile_photo_url || '',
           preferred_fishing_times: data.preferred_fishing_times || [],
-          tackle_details: {
-            lures: data.tackle_details?.lures || '',
-            bait: data.tackle_details?.bait || '',
-            hooks: data.tackle_details?.hooks || '',
-            weights: data.tackle_details?.weights || '',
-            other_gear: data.tackle_details?.other_gear || ''
-          },
           fishing_type: data.fishing_type || fishingType
         });
       } else {
@@ -225,9 +195,6 @@ export default function ProfileScreen() {
       age: '',
       location: '',
       tackle_categories: [],
-      rod: '',
-      reel: '',
-      line: '',
       experience_level: null,
       has_boat: false,
       boat_type: '',
@@ -236,13 +203,6 @@ export default function ProfileScreen() {
       favorite_species: [],
       profile_photo_url: '',
       preferred_fishing_times: [],
-      tackle_details: {
-        lures: '',
-        bait: '',
-        hooks: '',
-        weights: '',
-        other_gear: ''
-      },
       fishing_type: fishingType
     });
   }
@@ -273,9 +233,6 @@ export default function ProfileScreen() {
           age: profile.age ? parseInt(profile.age) : null,
           location: profile.location,
           tackle_categories: profile.tackle_categories,
-          rod: profile.rod,
-          reel: profile.reel,
-          line: profile.line,
           experience_level: profile.experience_level,
           has_boat: profile.has_boat,
           boat_type: profile.boat_type,
@@ -284,7 +241,6 @@ export default function ProfileScreen() {
           favorite_species: profile.favorite_species,
           profile_photo_url: profile.profile_photo_url,
           preferred_fishing_times: profile.preferred_fishing_times,
-          tackle_details: profile.tackle_details,
           fishing_type: fishingType,
           updated_at: new Date().toISOString()
         });
@@ -690,103 +646,6 @@ export default function ProfileScreen() {
                   );
                 })}
               </View>
-
-              <Text style={styles.label}>Rod</Text>
-              <TextInput
-                placeholder={fishingType === 'freshwater' ? "e.g., 7' Medium St. Croix" : "e.g., 7' Heavy Penn"}
-                placeholderTextColor="#7E8BA0"
-                value={profile.rod}
-                onChangeText={(v) => setProfile(p => ({ ...p, rod: v }))}
-                style={styles.input}
-              />
-
-              <Text style={styles.label}>Reel</Text>
-              <TextInput
-                placeholder={fishingType === 'freshwater' ? "e.g., Shimano 2500" : "e.g., Penn Spinfisher VI 4500"}
-                placeholderTextColor="#7E8BA0"
-                value={profile.reel}
-                onChangeText={(v) => setProfile(p => ({ ...p, reel: v }))}
-                style={styles.input}
-              />
-
-              <Text style={styles.label}>Line</Text>
-              <TextInput
-                placeholder={fishingType === 'freshwater' ? "e.g., 12lb fluorocarbon" : "e.g., 30lb braid"}
-                placeholderTextColor="#7E8BA0"
-                value={profile.line}
-                onChangeText={(v) => setProfile(p => ({ ...p, line: v }))}
-                style={styles.input}
-              />
-
-              <Text style={styles.sectionHeader}>🎣 Detailed Tackle</Text>
-              
-              <Text style={styles.label}>Lures & Soft Plastics</Text>
-              <TextInput
-                placeholder={fishingType === 'freshwater' 
-                  ? "e.g., Senkos, Spinnerbaits, Crankbaits" 
-                  : "e.g., Spooks, Bucktails, Gulp, Swimmers"}
-                placeholderTextColor="#7E8BA0"
-                value={profile.tackle_details.lures}
-                onChangeText={(v) => setProfile(p => ({ 
-                  ...p, 
-                  tackle_details: { ...p.tackle_details, lures: v }
-                }))}
-                style={styles.input}
-              />
-
-              <Text style={styles.label}>Bait</Text>
-              <TextInput
-                placeholder={fishingType === 'freshwater'
-                  ? "e.g., Nightcrawlers, Minnows, Leeches"
-                  : "e.g., Live eels, Bunker, Squid, Clams"}
-                placeholderTextColor="#7E8BA0"
-                value={profile.tackle_details.bait}
-                onChangeText={(v) => setProfile(p => ({ 
-                  ...p, 
-                  tackle_details: { ...p.tackle_details, bait: v }
-                }))}
-                style={styles.input}
-              />
-
-              <Text style={styles.label}>Hooks</Text>
-              <TextInput
-                placeholder={fishingType === 'freshwater'
-                  ? "e.g., Offset worm hooks, Trebles"
-                  : "e.g., Circle hooks 8/0, J-hooks 2/0"}
-                placeholderTextColor="#7E8BA0"
-                value={profile.tackle_details.hooks}
-                onChangeText={(v) => setProfile(p => ({ 
-                  ...p, 
-                  tackle_details: { ...p.tackle_details, hooks: v }
-                }))}
-                style={styles.input}
-              />
-
-              <Text style={styles.label}>Weights & Sinkers</Text>
-              <TextInput
-                placeholder={fishingType === 'freshwater'
-                  ? "e.g., Bullet weights, Split shot"
-                  : "e.g., Bank sinkers, Egg sinkers, Jig heads"}
-                placeholderTextColor="#7E8BA0"
-                value={profile.tackle_details.weights}
-                onChangeText={(v) => setProfile(p => ({ 
-                  ...p, 
-                  tackle_details: { ...p.tackle_details, weights: v }
-                }))}
-                style={styles.input}
-              />
-
-              <Text style={styles.label}>Other Gear</Text>
-              <TextInput
-                placeholder="e.g., Net, Pliers, Tackle box, Cooler"
-                placeholderTextColor="#7E8BA0"
-                value={profile.tackle_details.other_gear}
-                onChangeText={(v) => setProfile(p => ({ 
-                  ...p, 
-                  tackle_details: { ...p.tackle_details, other_gear: v }
-                }))}
-                style={styles.input}
-              />
             </ScrollView>
 
             <View style={styles.settingsFooter}>
@@ -870,5 +729,4 @@ const styles = StyleSheet.create({
  saveBtn: { alignSelf: 'flex-end', backgroundColor: '#1A2440', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: '#2A3A63' },
  saveBtnDisabled: { opacity: 0.5 },
  saveBtnText: { color: '#E9F2FF', fontWeight: '700' },
- sectionHeader: { color: '#72E5A2', fontSize: 16, fontWeight: '700', marginTop: 16, marginBottom: 8 },
 });

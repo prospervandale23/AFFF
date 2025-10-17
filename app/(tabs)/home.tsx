@@ -1,3 +1,4 @@
+import { calculateFishingScore, calculateMoonPhase, fetchBuoyData, fetchTideData, getWindDirection, mpsToMph } from '@/lib/noaa';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -9,11 +10,11 @@ import {
 
 // Types
 type Buoy = { id: string; name: string; lat: number; lon: number };
-type Obs = { time?: string; wtmpC?: number; atmpC?: number; presHpa?: number };
+type Obs = { time?: string; wtmpC?: number; atmpC?: number; presHpa?: number; wdir?: number; wspd?: number; gst?: number };
 type TideData = {
   time: string;
   height: number;
-  type: 'high' | 'low';
+  type: 'H' | 'L';
 };
 type WindData = {
   speed: number;
@@ -28,11 +29,13 @@ type MoonPhase = {
   nextFull: string;
 };
 
-// Default buoys
+// Real NOAA Buoys
 const DEFAULT_BUOYS: Buoy[] = [
-  { id: '44020', name: 'Block Island (44020)', lat: 40.97, lon: -71.12 },
-  { id: '44097', name: 'Buzzards Bay (44097)', lat: 41.39, lon: -71.03 },
-  { id: '44025', name: 'Long Island (44025)', lat: 40.25, lon: -73.16 },
+  { id: '44097', name: 'Block Island Sound, RI', lat: 41.139, lon: -71.128 },
+  { id: '44020', name: 'Nantucket Sound, MA', lat: 40.969, lon: -71.124 },
+  { id: '44025', name: 'Long Island, NY', lat: 40.251, lon: -73.164 },
+  { id: '44017', name: 'Montauk Point, NY', lat: 40.694, lon: -72.048 },
+  { id: '44065', name: 'New York Harbor, NY', lat: 40.369, lon: -73.703 },
 ];
 
 export default function HomeScreen() {
@@ -70,35 +73,42 @@ export default function HomeScreen() {
       setLoading(true);
       setDebug('');
 
-      // Your existing API call (currently disabled due to CORS)
-      // For now, we'll use mock data to prevent errors
-      const mockData = {
-        time: new Date().toISOString(),
-        water_temp_c: 18.5,
-        air_temp_c: 22.1,
-        pressure_hpa: 1013.2
-      };
+      console.log('📡 Fetching real NOAA data for buoy:', stationId);
+      
+      const data = await fetchBuoyData(stationId);
 
       if (!mounted.current) return;
       
       setObs({
-        time: mockData.time,
-        wtmpC: mockData.water_temp_c,
-        atmpC: mockData.air_temp_c,
-        presHpa: mockData.pressure_hpa
+        time: data.time,
+        wtmpC: data.water_temp_c ?? undefined,
+        atmpC: data.air_temp_c ?? undefined,
+        presHpa: data.pressure_hpa ?? undefined,
+        wdir: data.wind_direction ?? undefined,
+        wspd: data.wind_speed_mps ?? undefined,
+        gst: data.wind_gust_mps ?? undefined
       });
+      
+      // Update wind data for display
+      if (data.wind_speed_mps) {
+        setWindData({
+          speed: mpsToMph(data.wind_speed_mps),
+          direction: data.wind_direction || 0,
+          gust: data.wind_gust_mps ? mpsToMph(data.wind_gust_mps) : undefined
+        });
+      }
+      
+      // Track pressure history for trend
+      if (data.pressure_hpa != null) {
+        setRecentPres(prev => [data.pressure_hpa!, ...prev.slice(0, 4)]);
+      }
+      
+      console.log('✅ Real buoy data loaded successfully');
       
     } catch (e: any) {
       if (!mounted.current) return;
-      console.warn('Buoy data error:', e);
-      setDebug('Using sample data - NOAA API needs CORS configuration');
-      // Set sample data instead of failing
-      setObs({
-        time: new Date().toISOString(),
-        wtmpC: 18.5,
-        atmpC: 22.1,
-        presHpa: 1013.2
-      });
+      console.warn('❌ Buoy data error:', e);
+      setDebug('Could not load buoy data. Check connection or try another buoy.');
     } finally {
       mounted.current && setLoading(false);
     }
@@ -108,100 +118,26 @@ export default function HomeScreen() {
     try {
       setConditionsLoading(true);
       
-      // For now, using mock data for all marine conditions
-      // Later we'll integrate with proper marine APIs
+      console.log('🌊 Fetching tide data...');
       
-      // Mock wind data
-      setWindData({
-        speed: Math.floor(Math.random() * 15) + 5, // 5-20 mph
-        direction: Math.floor(Math.random() * 360),
-        gust: Math.floor(Math.random() * 10) + 15 // 15-25 mph
-      });
-
-      // Mock tide data (next 4 tides)
-      const now = new Date();
-      const mockTides: TideData[] = [];
-      for (let i = 0; i < 4; i++) {
-        const tideTime = new Date(now.getTime() + (i * 6 * 60 * 60 * 1000)); // Every 6 hours
-        mockTides.push({
-          time: tideTime.toISOString(),
-          height: Math.random() * 4 + 1, // 1-5 feet
-          type: i % 2 === 0 ? 'high' : 'low'
-        });
-      }
-      setTideData(mockTides);
-
-      // Calculate moon phase (this is real calculation!)
+      // Real tide data from NOAA (Boston station by default)
+      const tides = await fetchTideData('8443970');
+      setTideData(tides.slice(0, 4)); // Next 4 tides
+      
+      console.log('✅ Tide data loaded');
+      
+      // Calculate moon phase (this is a calculation, not an API call)
       const moonPhaseData = calculateMoonPhase();
       setMoonPhase(moonPhaseData);
+      
+      console.log('🌙 Moon phase calculated:', moonPhaseData.phase);
 
     } catch (error) {
-      console.error('Marine conditions error:', error);
+      console.error('❌ Marine conditions error:', error);
+      setDebug('Could not load tide data. Using default values.');
     } finally {
       setConditionsLoading(false);
     }
-  }
-
-  function calculateMoonPhase(): MoonPhase {
-    const now = new Date();
-    
-    // Simplified moon phase calculation
-    const knownNewMoon = new Date('2024-01-11'); // Known new moon
-    const synodicMonth = 29.53058867; // Days in lunar cycle
-    
-    const daysSinceKnownNew = (now.getTime() - knownNewMoon.getTime()) / (1000 * 60 * 60 * 24);
-    const cyclePosition = daysSinceKnownNew % synodicMonth;
-    const age = Math.floor(cyclePosition);
-    
-    let phase = '';
-    let illumination = 0;
-    
-    if (age < 1) {
-      phase = 'New Moon';
-      illumination = 0;
-    } else if (age < 7) {
-      phase = 'Waxing Crescent';
-      illumination = age / 14;
-    } else if (age < 9) {
-      phase = 'First Quarter';
-      illumination = 0.5;
-    } else if (age < 14) {
-      phase = 'Waxing Gibbous';
-      illumination = (age - 7) / 7 * 0.5 + 0.5;
-    } else if (age < 16) {
-      phase = 'Full Moon';
-      illumination = 1;
-    } else if (age < 22) {
-      phase = 'Waning Gibbous';
-      illumination = 1 - ((age - 15) / 7 * 0.5);
-    } else if (age < 24) {
-      phase = 'Last Quarter';
-      illumination = 0.5;
-    } else {
-      phase = 'Waning Crescent';
-      illumination = 0.5 - ((age - 22) / 7 * 0.5);
-    }
-
-    // Calculate next new and full moons
-    const daysToNextNew = synodicMonth - cyclePosition;
-    const daysToNextFull = age < 15 ? 15 - age : synodicMonth - age + 15;
-    
-    const nextNew = new Date(now.getTime() + daysToNextNew * 24 * 60 * 60 * 1000);
-    const nextFull = new Date(now.getTime() + daysToNextFull * 24 * 60 * 60 * 1000);
-
-    return {
-      phase,
-      illumination: Math.round(illumination * 100) / 100,
-      age,
-      nextNew: nextNew.toISOString(),
-      nextFull: nextFull.toISOString()
-    };
-  }
-
-  function getWindDirection(degrees: number): string {
-    const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
-    const index = Math.round(degrees / 22.5) % 16;
-    return directions[index];
   }
 
   function getMoonEmoji(phase: string): string {
@@ -219,55 +155,18 @@ export default function HomeScreen() {
   }
 
   function getFishingConditions(): { score: string; color: string; reason: string } {
-    // Simple fishing conditions algorithm based on available data
-    let score = 0;
-    let reasons: string[] = [];
-
-    // Pressure analysis
-    if (obs?.presHpa) {
-      if (obs.presHpa > 1020) {
-        score += 1;
-        reasons.push('High pressure');
-      } else if (obs.presHpa < 1000) {
-        score -= 1;
-        reasons.push('Low pressure');
-      }
-    }
-
-    // Wind analysis
-    if (windData) {
-      if (windData.speed < 10) {
-        score += 1;
-        reasons.push('Light winds');
-      } else if (windData.speed > 20) {
-        score -= 1;
-        reasons.push('Strong winds');
-      }
-    }
-
-    // Moon phase analysis
-    if (moonPhase) {
-      if (moonPhase.phase === 'New Moon' || moonPhase.phase === 'Full Moon') {
-        score += 1;
-        reasons.push('Major lunar phase');
-      } else if (moonPhase.phase === 'First Quarter' || moonPhase.phase === 'Last Quarter') {
-        score += 0.5;
-        reasons.push('Minor lunar phase');
-      }
-    }
-
-    // Tide analysis (simplified - would need more complex logic for real predictions)
-    const nextTide = tideData[0];
-    if (nextTide && nextTide.type === 'high') {
-      score += 0.5;
-      reasons.push('Incoming high tide');
-    }
-
-    // Convert score to rating
-    if (score >= 2) return { score: 'Excellent', color: '#72E5A2', reason: reasons.join(' • ') };
-    if (score >= 1) return { score: 'Good', color: '#FFD93D', reason: reasons.join(' • ') };
-    if (score >= 0) return { score: 'Fair', color: '#FF8A8A', reason: reasons.join(' • ') };
-    return { score: 'Poor', color: '#FF6B6B', reason: reasons.join(' • ') };
+    const result = calculateFishingScore({
+      pressure: obs?.presHpa,
+      windSpeed: windData?.speed,
+      moonPhase: moonPhase?.phase,
+      tideType: tideData[0]?.type,
+    });
+    
+    return {
+      score: result.rating,
+      color: result.color,
+      reason: result.reasons.join(' • ')
+    };
   }
 
   const pressureTrend = useMemo(() => {
@@ -404,7 +303,7 @@ export default function HomeScreen() {
                 <View key={index} style={styles.tideCard}>
                   <View style={styles.tideHeader}>
                     <Text style={styles.tideType}>
-                      {tide.type === 'high' ? '⬆️ High' : '⬇️ Low'}
+                      {tide.type === 'H' ? '⬆️ High' : '⬇️ Low'}
                     </Text>
                     <Text style={styles.tideHeight}>{tide.height.toFixed(1)}ft</Text>
                   </View>
@@ -502,7 +401,6 @@ const styles = StyleSheet.create({
   },
   buoyText: { color: '#E9F2FF', fontSize: 14, fontWeight: '600', maxWidth: 280 },
   
-  // Enhanced Fishing Conditions Overview
   conditionsOverview: { paddingHorizontal: 20, marginBottom: 20 },
   conditionsTitle: { color: '#E8ECF1', fontSize: 20, fontWeight: '700', marginBottom: 12, letterSpacing: -0.3 },
   conditionsCard: { 
@@ -520,7 +418,6 @@ const styles = StyleSheet.create({
   conditionsScore: { fontSize: 28, fontWeight: '800', marginBottom: 6, letterSpacing: -0.5 },
   conditionsReason: { color: '#9BB0CC', fontSize: 15, textAlign: 'center', lineHeight: 20 },
   
-  // Enhanced Cards Grid
   cardsGrid: { paddingHorizontal: 20, gap: 16, marginBottom: 20 },
   card: { 
     backgroundColor: '#121A2B', 
@@ -546,7 +443,6 @@ const styles = StyleSheet.create({
   bigNumber: { fontSize: 40, fontWeight: '800', color: '#F5FAFF', letterSpacing: -1 },
   unit: { fontSize: 18, color: '#A9B7CD', marginLeft: 8, marginBottom: 6, fontWeight: '500' },
   
-  // Enhanced Trend Pills
   trendPill: { 
     alignSelf: 'flex-start', 
     marginTop: 12, 
@@ -564,7 +460,6 @@ const styles = StyleSheet.create({
   trendDown: { backgroundColor: '#FF8A8A' },
   trendFlat: { backgroundColor: '#C8D2E0' },
   
-  // Enhanced Wind & Moon Displays
   windDirection: { color: '#E8ECF1', fontSize: 17, fontWeight: '600', marginTop: 6, letterSpacing: -0.2 },
   
   moonContainer: { alignItems: 'center', marginBottom: 12 },
@@ -579,7 +474,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2
   },
   
-  // Enhanced Text Styles
   caption: { 
     color: '#8EA3C0', 
     fontSize: 13, 
@@ -595,7 +489,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1
   },
   
-  // Enhanced Tides Section
   tidesSection: { paddingHorizontal: 20, marginBottom: 20 },
   sectionTitle: { 
     color: '#E8ECF1', 
@@ -628,7 +521,6 @@ const styles = StyleSheet.create({
   tideHeight: { color: '#E8ECF1', fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
   tideTime: { color: '#9BB0CC', fontSize: 12, fontWeight: '500', letterSpacing: 0.2 },
   
-  // Enhanced Debug Container
   debugContainer: { paddingHorizontal: 20, marginBottom: 20 },
   debugTxt: { 
     color: '#FFB0B0', 
@@ -642,7 +534,6 @@ const styles = StyleSheet.create({
     borderColor: '#333'
   },
 
-  // Enhanced Modal Styles
   modalBackdrop: { 
     flex: 1, 
     backgroundColor: 'rgba(6,10,18,0.75)', 

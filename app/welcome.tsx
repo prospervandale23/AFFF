@@ -1,117 +1,299 @@
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 
-type FishingType = 'Spinning' | 'Fly' | 'Jigging' | 'Baitcasting' | 'Trolling' | 'Ice';
+const { width } = Dimensions.get('window');
 
-const TYPES: FishingType[] = ['Spinning', 'Fly', 'Jigging', 'Baitcasting', 'Trolling', 'Ice'];
-
-export default function Welcome() {
+export default function WelcomeLanding() {
   const router = useRouter();
-  const [selected, setSelected] = useState<FishingType | null>(null);
-  const [saving, setSaving] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  const wave1 = useRef(new Animated.Value(0)).current;
+  const wave2 = useRef(new Animated.Value(0)).current;
 
-  const canContinue = useMemo(() => !!selected, [selected]);
+  useEffect(() => {
+    // Check if user already selected type
+    checkExistingUser();
 
-  const persistChoice = useCallback(async (choice: FishingType) => {
-    // Always save locally so routing logic works offline/unauthenticated
-    await AsyncStorage.setItem('fishingType', choice);
+    // Fade in animation
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: true,
+    }).start();
 
-    // If signed in, also sync to Supabase (user metadata + optional profiles table)
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user;
-      if (user) {
-        // 1) Store in user metadata (simple + universal)
-        await supabase.auth.updateUser({ data: { fishingType: choice } });
+    // Float animation for logo
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, {
+          toValue: -15,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatAnim, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
 
-        // 2) OPTIONAL: upsert into a profiles table if you have one
-        //   Requires a table like: profiles(id uuid primary key, fishing_type text, updated_at timestamp)
-        //   and RLS policy allowing user = auth.uid()
-        await supabase
-          .from('profiles')
-          .upsert(
-            { id: user.id, fishing_type: choice, updated_at: new Date().toISOString() },
-            { onConflict: 'id' }
-          )
-          .throwOnError();
-      }
-    } catch (e: any) {
-      // Non-fatal: local state is enough to proceed.
-      console.warn('Supabase sync failed (continuing with local value):', e?.message ?? e);
-    }
+    // Wave animations
+    Animated.loop(
+      Animated.timing(wave1, {
+        toValue: -width,
+        duration: 15000,
+        useNativeDriver: true,
+      })
+    ).start();
+
+    Animated.loop(
+      Animated.timing(wave2, {
+        toValue: width,
+        duration: 20000,
+        useNativeDriver: true,
+      })
+    ).start();
   }, []);
 
-  const onContinue = useCallback(async () => {
-    if (!selected) return;
+  async function checkExistingUser() {
     try {
-      setSaving(true);
-      await persistChoice(selected);
-      router.replace('/(tabs)/feeds');
-    } catch (err: any) {
-      console.error(err);
-      Alert.alert('Oops', 'Could not save your choice. Please try again.');
-    } finally {
-      setSaving(false);
+      const fishingType = await AsyncStorage.getItem('fishingType');
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (fishingType && session) {
+        router.replace('/(tabs)/feeds');
+      }
+    } catch (error) {
+      console.error('Error checking user:', error);
     }
-  }, [persistChoice, selected, router]);
+  }
+
+  async function selectFishingType(type: 'freshwater' | 'saltwater') {
+    await AsyncStorage.setItem('fishingType', type);
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (session) {
+      await supabase.from('profiles').update({
+        fishing_type: type,
+        updated_at: new Date().toISOString()
+      }).eq('id', session.user.id);
+      
+      router.replace('/(tabs)/feeds');
+    } else {
+      router.push('/(tabs)/profile');
+    }
+  }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>🎣 Welcome to Fishing Buddy</Text>
-      <Text style={styles.subtitle}>Pick your primary fishing style</Text>
+      {/* Animated Content */}
+      <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+        <Animated.Text
+          style={[styles.logo, { transform: [{ translateY: floatAnim }] }]}
+        >
+          🎣
+        </Animated.Text>
+        <Text style={styles.appName}>Fishing Buddy</Text>
+        <Text style={styles.tagline}>Connect with local anglers</Text>
 
-      <View style={styles.grid}>
-        {TYPES.map((t) => {
-          const active = t === selected;
-          return (
-            <Pressable
-              key={t}
-              onPress={() => setSelected(t)}
-              style={[styles.card, active && styles.cardActive]}
-            >
-              <Text style={[styles.cardText, active && styles.cardTextActive]}>{t}</Text>
-            </Pressable>
-          );
-        })}
+        <View style={styles.divider} />
+
+        <Text style={styles.question}>What type of fishing do you prefer?</Text>
+
+        {/* Freshwater Button */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.typeButton,
+            styles.freshwaterButton,
+            pressed && styles.buttonPressed
+          ]}
+          onPress={() => selectFishingType('freshwater')}
+        >
+          <Text style={styles.buttonEmoji}>🏞️</Text>
+          <View style={styles.buttonContent}>
+            <Text style={styles.buttonTitle}>Freshwater</Text>
+            <Text style={styles.buttonSubtitle}>Lakes • Rivers • Ponds</Text>
+            <View style={styles.speciesRow}>
+              <Text style={styles.speciesText}>Bass • Trout • Pike • Walleye</Text>
+            </View>
+          </View>
+        </Pressable>
+
+        {/* Saltwater Button */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.typeButton,
+            styles.saltwaterButton,
+            pressed && styles.buttonPressed
+          ]}
+          onPress={() => selectFishingType('saltwater')}
+        >
+          <Text style={styles.buttonEmoji}>🌊</Text>
+          <View style={styles.buttonContent}>
+            <Text style={styles.buttonTitle}>Saltwater</Text>
+            <Text style={styles.buttonSubtitle}>Ocean • Bays • Coastal</Text>
+            <View style={styles.speciesRow}>
+              <Text style={styles.speciesText}>Stripers • Tuna • Fluke • Blues</Text>
+            </View>
+          </View>
+        </Pressable>
+      </Animated.View>
+
+      {/* Animated Waves at Bottom */}
+      <View style={styles.waveContainer}>
+        <Animated.View
+          style={[
+            styles.wave,
+            { transform: [{ translateX: wave1 }], opacity: 0.3 }
+          ]}
+        >
+          <WavePath color="#72E5A2" />
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.wave,
+            { transform: [{ translateX: wave2 }], opacity: 0.4, bottom: 10 }
+          ]}
+        >
+          <WavePath color="#4A9FD8" />
+        </Animated.View>
       </View>
-
-      <Pressable
-        style={[styles.button, !canContinue && styles.buttonDisabled]}
-        onPress={onContinue}
-        disabled={!canContinue || saving}
-      >
-        {saving ? (
-          <ActivityIndicator />
-        ) : (
-          <Text style={styles.buttonText}>Continue</Text>
-        )}
-      </Pressable>
     </View>
+  );
+}
+
+function WavePath({ color }: { color: string }) {
+  return (
+    <View style={[styles.waveSvg, { backgroundColor: color }]} />
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1, backgroundColor: '#0B1220', alignItems: 'center', justifyContent: 'center', padding: 20,
+    flex: 1,
+    backgroundColor: '#0B1220',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  title: { color: 'white', fontSize: 26, fontWeight: 'bold', marginBottom: 8, textAlign: 'center' },
-  subtitle: { color: '#A7B0C0', fontSize: 16, marginBottom: 20, textAlign: 'center' },
-  grid: {
-    width: '100%', maxWidth: 420, flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 24,
+  content: {
+    width: '100%',
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    zIndex: 10,
   },
-  card: {
-    borderWidth: 1, borderColor: '#2A3448', paddingVertical: 12, paddingHorizontal: 16,
-    borderRadius: 10, minWidth: 120, alignItems: 'center',
+  logo: {
+    fontSize: 80,
+    marginBottom: 16,
   },
-  cardActive: { backgroundColor: 'white', borderColor: 'white' },
-  cardText: { color: 'white', fontSize: 16, fontWeight: '600' },
-  cardTextActive: { color: '#0B1220' },
-  button: {
-    backgroundColor: 'white', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 10, minWidth: 180, alignItems: 'center',
+  appName: {
+    fontSize: 42,
+    fontWeight: '800',
+    color: '#E8ECF1',
+    marginBottom: 8,
+    letterSpacing: -1,
   },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: '#0B1220', fontSize: 16, fontWeight: '700' },
+  tagline: {
+    fontSize: 16,
+    color: '#9BB0CC',
+    fontWeight: '500',
+    marginBottom: 40,
+  },
+  divider: {
+    width: 60,
+    height: 3,
+    backgroundColor: '#72E5A2',
+    borderRadius: 2,
+    marginBottom: 32,
+  },
+  question: {
+    fontSize: 20,
+    color: '#E8ECF1',
+    fontWeight: '700',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  typeButton: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#121A2B',
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#1E2A44',
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  freshwaterButton: {
+    borderColor: '#72E5A2',
+  },
+  saltwaterButton: {
+    borderColor: '#4A9FD8',
+  },
+  buttonPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
+  },
+  buttonEmoji: {
+    fontSize: 48,
+    marginRight: 20,
+  },
+  buttonContent: {
+    flex: 1,
+  },
+  buttonTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#E8ECF1',
+    marginBottom: 4,
+    letterSpacing: -0.5,
+  },
+  buttonSubtitle: {
+    fontSize: 14,
+    color: '#9BB0CC',
+    marginBottom: 12,
+    fontWeight: '500',
+  },
+  speciesRow: {
+    backgroundColor: 'rgba(114, 229, 162, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  speciesText: {
+    fontSize: 12,
+    color: '#72E5A2',
+    fontWeight: '600',
+  },
+  waveContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    width: width * 2,
+    height: 150,
+    overflow: 'hidden',
+  },
+  wave: {
+    position: 'absolute',
+    bottom: 0,
+    width: width * 2,
+    height: 80,
+  },
+  waveSvg: {
+    width: '100%',
+    height: '100%',
+    borderTopLeftRadius: 1000,
+    borderTopRightRadius: 1000,
+  },
 });
