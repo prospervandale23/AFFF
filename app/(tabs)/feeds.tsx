@@ -13,7 +13,8 @@ import {
   TextInput,
   View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FishingTheme } from '../../constants/FishingTheme';
 import { getPotentialMatches, startConversation } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 
@@ -42,9 +43,10 @@ interface Filters {
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH * 0.9;
-const CARD_HEIGHT = SCREEN_HEIGHT * 0.65; // Reduced from 0.7 to 0.65
+const CARD_HEIGHT = SCREEN_HEIGHT * 0.7;
 
 export default function FeedsScreen() {
+  const insets = useSafeAreaInsets();
   const { fishingType, species, tackleCategories } = useFishing();
   
   const [buddies, setBuddies] = useState<FishingBuddy[]>([]);
@@ -91,13 +93,6 @@ export default function FeedsScreen() {
     try {
       console.log('🔍 FEEDS - Checking for user session...');
       const { data: { session } } = await supabase.auth.getSession();
-      
-      console.log('🔍 FEEDS - Session check:', {
-        hasSession: !!session,
-        hasUser: !!session?.user,
-        userId: session?.user?.id,
-        isAnonymous: session?.user?.is_anonymous
-      });
       
       if (session?.user) {
         setCurrentUserId(session.user.id);
@@ -205,45 +200,45 @@ export default function FeedsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.screenContent, styles.centered]} edges={['top']}>
+      <View style={[styles.screenContent, styles.centered]}>
         <Text style={styles.loadingText}>Finding {fishingType} fishing buddies...</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (!currentUserId) {
     return (
-      <SafeAreaView style={[styles.screenContent, styles.centered]} edges={['top']}>
+      <View style={[styles.screenContent, styles.centered]}>
         <Text style={styles.emptyStateText}>Please sign in first</Text>
         <Text style={styles.emptyStateSubtext}>Go to Profile tab to get started</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (buddies.length === 0) {
     return (
-      <SafeAreaView style={[styles.screenContent, styles.centered]} edges={['top']}>
+      <View style={[styles.screenContent, styles.centered]}>
         <Text style={styles.emptyStateText}>No {fishingType} fishing buddies found</Text>
         <Text style={styles.emptyStateSubtext}>Try adjusting your filters or check back later!</Text>
         <Pressable style={styles.filterButton} onPress={() => setFiltersOpen(true)}>
-          <Text style={styles.filterButtonText}>Adjust Filters</Text>
+          <Text style={styles.filterButtonText}>ADJUST FILTERS</Text>
         </Pressable>
-      </SafeAreaView>
+      </View>
     );
   }
 
   const currentBuddy = buddies[currentIndex];
 
   return (
-    <SafeAreaView style={styles.screenContent} edges={['top']}>
+    <View style={[styles.screenContent, { paddingTop: insets.top }]}>
       <View style={styles.feedHeader}>
         <Text style={styles.feedTitle}>
-          {fishingType === 'freshwater' ? '🏞️' : '🌊'} {fishingType === 'freshwater' ? 'Freshwater' : 'Saltwater'} Buddies
+          {fishingType === 'freshwater' ? 'FRESHWATER' : 'SALTWATER'} BUDDIES
         </Text>
         <View style={styles.headerRow}>
           <Text style={styles.feedSubtitle}>{buddies.length} nearby • {currentIndex + 1} of {buddies.length}</Text>
           <Pressable style={styles.filterButton} onPress={() => setFiltersOpen(true)}>
-            <Text style={styles.filterButtonText}>Filters</Text>
+            <Text style={styles.filterButtonText}>FILTERS</Text>
           </Pressable>
         </View>
       </View>
@@ -257,15 +252,15 @@ export default function FeedsScreen() {
         />
       </View>
 
-      <View style={styles.navigationButtons}>
+      <View style={[styles.navigationButtons, { paddingBottom: insets.bottom + 16 }]}>
         <Pressable style={styles.navButton} onPress={goToPrevious}>
-          <Text style={styles.navButtonText}>← Previous</Text>
+          <Text style={styles.navButtonText}>← PREVIOUS</Text>
         </Pressable>
         <Pressable style={styles.messageButton} onPress={() => openMessageModal(currentBuddy)}>
-          <Text style={styles.messageButtonText}>💬 Message</Text>
+          <Text style={styles.messageButtonText}>MESSAGE</Text>
         </Pressable>
         <Pressable style={styles.navButton} onPress={goToNext}>
-          <Text style={styles.navButtonText}>Next →</Text>
+          <Text style={styles.navButtonText}>NEXT →</Text>
         </Pressable>
       </View>
 
@@ -291,7 +286,7 @@ export default function FeedsScreen() {
         onClose={() => setMessageModalOpen(false)}
         sending={sending}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -379,18 +374,18 @@ function BuddyCard({ buddy, onMessage }: { buddy: FishingBuddy; onMessage: () =>
           />
         ) : (
           <View style={styles.placeholderPhoto}>
-            <Text style={styles.placeholderText}>🎣</Text>
+            <Text style={styles.placeholderText}>ANGLER</Text>
             <Text style={styles.placeholderName}>{buddy.display_name}</Text>
           </View>
         )}
         <View style={styles.photoOverlay}>
           <View style={styles.buddyInfo}>
             <Text style={styles.buddyName}>{buddy.display_name}, {buddy.age}</Text>
-            <Text style={styles.buddyLocation}>📍 {buddy.location}</Text>
+            <Text style={styles.buddyLocation}>• {buddy.location}</Text>
             {buddy.home_port && (
-              <Text style={styles.buddyHomePort}>⚓ {buddy.home_port}</Text>
+              <Text style={styles.buddyHomePort}>Port: {buddy.home_port}</Text>
             )}
-            <Text style={styles.buddyActivity}>🟢 {getLastActiveText(buddy.last_active)}</Text>
+            <Text style={styles.buddyActivity}>• {getLastActiveText(buddy.last_active)}</Text>
           </View>
         </View>
       </View>
@@ -399,18 +394,18 @@ function BuddyCard({ buddy, onMessage }: { buddy: FishingBuddy; onMessage: () =>
         <Text style={styles.buddyBio}>{buddy.bio}</Text>
         
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Experience:</Text>
+          <Text style={styles.detailLabel}>EXPERIENCE:</Text>
           <Text style={styles.detailValue}>{buddy.experience_level}</Text>
         </View>
         
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Has Boat:</Text>
-          <Text style={styles.detailValue}>{buddy.has_boat ? 'Yes 🚤' : 'No'}</Text>
+          <Text style={styles.detailLabel}>HAS BOAT:</Text>
+          <Text style={styles.detailValue}>{buddy.has_boat ? 'Yes' : 'No'}</Text>
         </View>
         
         {buddy.tackle_categories.length > 0 && (
           <View style={styles.detailSection}>
-            <Text style={styles.detailLabel}>Tackle:</Text>
+            <Text style={styles.detailLabel}>TACKLE:</Text>
             <View style={styles.tackleRow}>
               {buddy.tackle_categories.map(t => (
                 <View key={t} style={styles.miniChip}>
@@ -423,13 +418,13 @@ function BuddyCard({ buddy, onMessage }: { buddy: FishingBuddy; onMessage: () =>
         
         {buddy.favorite_species.length > 0 && (
           <View style={styles.detailSection}>
-            <Text style={styles.detailLabel}>Targets:</Text>
+            <Text style={styles.detailLabel}>TARGETS:</Text>
             <Text style={styles.detailValue}>{buddy.favorite_species.join(', ')}</Text>
           </View>
         )}
 
         <Pressable style={styles.messageCardButton} onPress={onMessage}>
-          <Text style={styles.messageCardButtonText}>💬 Send Message</Text>
+          <Text style={styles.messageCardButtonText}>SEND MESSAGE</Text>
         </Pressable>
       </View>
     </View>
@@ -451,15 +446,15 @@ function FiltersModal({ visible, filters, onFiltersChange, onClose, onApply, tac
         <View style={styles.filtersCard}>
           <View style={styles.filtersHeader}>
             <Text style={styles.filtersTitle}>
-              Filter {fishingType === 'freshwater' ? 'Freshwater' : 'Saltwater'} Buddies
+              FILTER {fishingType === 'freshwater' ? 'FRESHWATER' : 'SALTWATER'} BUDDIES
             </Text>
             <Pressable onPress={onClose} style={styles.closeBtn}>
-              <Text style={styles.closeBtnText}>✕</Text>
+              <Text style={styles.closeBtnText}>×</Text>
             </Pressable>
           </View>
           
           <View style={styles.filtersContent}>
-            <Text style={styles.filterLabel}>Max Distance: {filters.maxDistance} miles</Text>
+            <Text style={styles.filterLabel}>MAX DISTANCE: {filters.maxDistance} MILES</Text>
             <View style={styles.distanceButtons}>
               {[10, 25, 50, 100].map(distance => (
                 <Pressable 
@@ -474,7 +469,7 @@ function FiltersModal({ visible, filters, onFiltersChange, onClose, onApply, tac
               ))}
             </View>
 
-            <Text style={styles.filterLabel}>Experience Level</Text>
+            <Text style={styles.filterLabel}>EXPERIENCE LEVEL</Text>
             <View style={styles.experienceButtons}>
               {['All', 'Beginner', 'Intermediate', 'Advanced'].map(level => (
                 <Pressable 
@@ -489,7 +484,7 @@ function FiltersModal({ visible, filters, onFiltersChange, onClose, onApply, tac
               ))}
             </View>
 
-            <Text style={styles.filterLabel}>Has Boat</Text>
+            <Text style={styles.filterLabel}>HAS BOAT</Text>
             <View style={styles.boatButtons}>
               {['All', 'Yes', 'No'].map(option => (
                 <Pressable 
@@ -507,7 +502,7 @@ function FiltersModal({ visible, filters, onFiltersChange, onClose, onApply, tac
 
           <View style={styles.filtersFooter}>
             <Pressable style={styles.applyBtn} onPress={onApply}>
-              <Text style={styles.applyBtnText}>Apply Filters</Text>
+              <Text style={styles.applyBtnText}>APPLY FILTERS</Text>
             </Pressable>
           </View>
         </View>
@@ -532,9 +527,9 @@ function MessageModal({ visible, buddy, message, onMessageChange, onSend, onClos
       <View style={styles.modalBackdrop}>
         <View style={styles.messageCard}>
           <View style={styles.messageHeader}>
-            <Text style={styles.messageTitle}>Message {buddy.display_name}</Text>
+            <Text style={styles.messageTitle}>MESSAGE {buddy.display_name.toUpperCase()}</Text>
             <Pressable onPress={onClose} style={styles.closeBtn}>
-              <Text style={styles.closeBtnText}>✕</Text>
+              <Text style={styles.closeBtnText}>×</Text>
             </Pressable>
           </View>
           
@@ -544,7 +539,7 @@ function MessageModal({ visible, buddy, message, onMessageChange, onSend, onClos
               multiline
               numberOfLines={6}
               placeholder="Write your message..."
-              placeholderTextColor="#7E8BA0"
+              placeholderTextColor={FishingTheme.colors.text.muted}
               value={message}
               onChangeText={onMessageChange}
             />
@@ -557,7 +552,7 @@ function MessageModal({ visible, buddy, message, onMessageChange, onSend, onClos
               disabled={sending || !message.trim()}
             >
               <Text style={styles.sendBtnText}>
-                {sending ? 'Sending...' : '💬 Send Message'}
+                {sending ? 'SENDING...' : 'SEND MESSAGE'}
               </Text>
             </Pressable>
           </View>
@@ -568,107 +563,351 @@ function MessageModal({ visible, buddy, message, onMessageChange, onSend, onClos
 }
 
 const styles = StyleSheet.create({
-  screenContent: { flex: 1, backgroundColor: '#0B1220' },
+  screenContent: { flex: 1, backgroundColor: FishingTheme.colors.background },
   centered: { justifyContent: 'center', alignItems: 'center', padding: 20 },
   
-  feedHeader: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 },
-  feedTitle: { fontSize: 24, fontWeight: '700', color: '#E8ECF1', marginBottom: 8 },
+  feedHeader: { 
+    paddingHorizontal: 20, 
+    paddingVertical: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: FishingTheme.colors.border,
+  },
+  feedTitle: { 
+    fontSize: 24, 
+    fontWeight: '800', 
+    color: FishingTheme.colors.darkGreen, 
+    marginBottom: 8,
+    letterSpacing: 1,
+  },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  feedSubtitle: { fontSize: 16, color: '#9BB0CC' },
+  feedSubtitle: { fontSize: 14, color: FishingTheme.colors.text.tertiary },
   
-  filterButton: { backgroundColor: '#1A2440', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#2A3A63' },
-  filterButtonText: { color: '#E9F2FF', fontSize: 12, fontWeight: '600' },
+  filterButton: { 
+    backgroundColor: FishingTheme.colors.card, 
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
+    borderRadius: 8, 
+    borderWidth: 2, 
+    borderColor: FishingTheme.colors.border 
+  },
+  filterButtonText: { 
+    color: FishingTheme.colors.darkGreen, 
+    fontSize: 11, 
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
   
   cardStack: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
   swipeCard: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    borderRadius: 20,
-    backgroundColor: '#121A2B',
-    borderWidth: 1,
-    borderColor: '#1E2A44',
+    borderRadius: 16,
+    backgroundColor: FishingTheme.colors.card,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.border,
     overflow: 'hidden',
+    ...FishingTheme.shadows.md,
   },
   
   buddyCard: { flex: 1 },
   photoContainer: { flex: 1, position: 'relative' },
   buddyPhoto: { width: '100%', height: '100%', resizeMode: 'cover' },
-  placeholderPhoto: { width: '100%', height: '100%', backgroundColor: '#1A2440', justifyContent: 'center', alignItems: 'center' },
-  placeholderText: { fontSize: 48, marginBottom: 8 },
-  placeholderName: { fontSize: 18, color: '#E8ECF1', fontWeight: '600' },
+  placeholderPhoto: { 
+    width: '100%', 
+    height: '100%', 
+    backgroundColor: FishingTheme.colors.sageGreen, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  placeholderText: { 
+    fontSize: 24, 
+    marginBottom: 8, 
+    color: FishingTheme.colors.cream,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+  placeholderName: { 
+    fontSize: 18, 
+    color: FishingTheme.colors.cream, 
+    fontWeight: '600' 
+  },
   photoOverlay: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(47, 69, 56, 0.85)',
     paddingHorizontal: 20,
     paddingVertical: 20,
   },
   buddyInfo: { gap: 4 },
-  buddyName: { fontSize: 28, fontWeight: '700', color: '#FFFFFF' },
-  buddyLocation: { fontSize: 16, color: '#E0E0E0' },
-  buddyHomePort: { fontSize: 14, color: '#C0C0C0' },
-  buddyActivity: { fontSize: 14, color: '#72E5A2' },
+  buddyName: { 
+    fontSize: 26, 
+    fontWeight: '800', 
+    color: FishingTheme.colors.cream,
+    letterSpacing: -0.5,
+  },
+  buddyLocation: { fontSize: 15, color: FishingTheme.colors.cream },
+  buddyHomePort: { fontSize: 13, color: FishingTheme.colors.cream, opacity: 0.9 },
+  buddyActivity: { fontSize: 13, color: FishingTheme.colors.cream, marginTop: 4 },
   
-  buddyDetails: { padding: 20, gap: 12 },
-  buddyBio: { fontSize: 16, color: '#E8ECF1', lineHeight: 22, marginBottom: 8 },
+  buddyDetails: { padding: 20, gap: 12, backgroundColor: FishingTheme.colors.card },
+  buddyBio: { 
+    fontSize: 15, 
+    color: FishingTheme.colors.text.primary, 
+    lineHeight: 22, 
+    marginBottom: 8 
+  },
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   detailSection: { gap: 6 },
-  detailLabel: { fontSize: 14, color: '#AFC3E1', fontWeight: '600' },
-  detailValue: { fontSize: 14, color: '#E8ECF1' },
+  detailLabel: { 
+    fontSize: 11, 
+    color: FishingTheme.colors.text.tertiary, 
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  detailValue: { fontSize: 14, color: FishingTheme.colors.text.primary, fontWeight: '600' },
   tackleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  miniChip: { backgroundColor: '#1A2440', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  miniChipText: { fontSize: 12, color: '#C8D2E0', fontWeight: '600' },
+  miniChip: { 
+    backgroundColor: FishingTheme.colors.darkGreen, 
+    paddingHorizontal: 10, 
+    paddingVertical: 5, 
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: FishingTheme.colors.border,
+  },
+  miniChipText: { 
+    fontSize: 11, 
+    color: FishingTheme.colors.cream, 
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
   
-  messageCardButton: { backgroundColor: '#72E5A2', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, marginTop: 8 },
-  messageCardButtonText: { color: '#0B1220', fontWeight: '700', textAlign: 'center' },
+  messageCardButton: { 
+    backgroundColor: FishingTheme.colors.darkGreen, 
+    paddingHorizontal: 16, 
+    paddingVertical: 12, 
+    borderRadius: 12, 
+    marginTop: 8,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.forestGreen,
+  },
+  messageCardButtonText: { 
+    color: FishingTheme.colors.cream, 
+    fontWeight: '800', 
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
   
-  navigationButtons: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 20 },
-  navButton: { backgroundColor: '#1A2440', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#2A3A63' },
-  navButtonText: { color: '#E9F2FF', fontWeight: '600' },
-  messageButton: { backgroundColor: '#72E5A2', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
-  messageButtonText: { color: '#0B1220', fontWeight: '700' },
+  navigationButtons: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingHorizontal: 20, 
+    paddingTop: 16,
+    borderTopWidth: 2,
+    borderTopColor: FishingTheme.colors.border,
+  },
+  navButton: { 
+    backgroundColor: FishingTheme.colors.card, 
+    paddingHorizontal: 14, 
+    paddingVertical: 10, 
+    borderRadius: 12, 
+    borderWidth: 2, 
+    borderColor: FishingTheme.colors.border 
+  },
+  navButtonText: { 
+    color: FishingTheme.colors.darkGreen, 
+    fontWeight: '700',
+    fontSize: 12,
+    letterSpacing: 0.3,
+  },
+  messageButton: { 
+    backgroundColor: FishingTheme.colors.darkGreen, 
+    paddingHorizontal: 20, 
+    paddingVertical: 12, 
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.forestGreen,
+  },
+  messageButtonText: { 
+    color: FishingTheme.colors.cream, 
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
   
-  loadingText: { color: '#E8ECF1', fontSize: 16 },
-  emptyStateText: { fontSize: 20, fontWeight: '600', color: '#E8ECF1', marginBottom: 8, textAlign: 'center' },
-  emptyStateSubtext: { fontSize: 16, color: '#9BB0CC', textAlign: 'center', marginBottom: 20 },
+  loadingText: { color: FishingTheme.colors.text.primary, fontSize: 16 },
+  emptyStateText: { 
+    fontSize: 20, 
+    fontWeight: '700', 
+    color: FishingTheme.colors.darkGreen, 
+    marginBottom: 8, 
+    textAlign: 'center' 
+  },
+  emptyStateSubtext: { 
+    fontSize: 16, 
+    color: FishingTheme.colors.text.tertiary, 
+    textAlign: 'center', 
+    marginBottom: 20 
+  },
   
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(6,10,18,0.8)', justifyContent: 'center', padding: 20 },
+  // Modal styles
+  modalBackdrop: { 
+    flex: 1, 
+    backgroundColor: FishingTheme.colors.overlay, 
+    justifyContent: 'center', 
+    padding: 20 
+  },
   
-  filtersCard: { backgroundColor: '#0F1627', borderRadius: 18, borderWidth: 1, borderColor: '#22304D' },
-  filtersHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#1E2A44' },
-  filtersTitle: { color: '#E8ECF1', fontSize: 18, fontWeight: '700' },
+  filtersCard: { 
+    backgroundColor: FishingTheme.colors.cream, 
+    borderRadius: 16, 
+    borderWidth: 2, 
+    borderColor: FishingTheme.colors.darkGreen 
+  },
+  filtersHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    padding: 16, 
+    borderBottomWidth: 2, 
+    borderBottomColor: FishingTheme.colors.border 
+  },
+  filtersTitle: { 
+    color: FishingTheme.colors.darkGreen, 
+    fontSize: 16, 
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    flex: 1,
+  },
   filtersContent: { padding: 16, gap: 16 },
-  filterLabel: { color: '#AFC3E1', fontSize: 14, fontWeight: '600', marginBottom: 8 },
+  filterLabel: { 
+    color: FishingTheme.colors.text.tertiary, 
+    fontSize: 11, 
+    fontWeight: '700', 
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
   
   distanceButtons: { flexDirection: 'row', gap: 8 },
-  distanceBtn: { flex: 1, backgroundColor: '#121A2B', paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#233355' },
-  distanceBtnActive: { backgroundColor: '#72E5A2', borderColor: '#72E5A2' },
-  distanceBtnText: { color: '#E6F0FF', textAlign: 'center', fontWeight: '600' },
-  distanceBtnTextActive: { color: '#0B1220' },
+  distanceBtn: { 
+    flex: 1, 
+    backgroundColor: FishingTheme.colors.card, 
+    paddingVertical: 10, 
+    borderRadius: 8, 
+    borderWidth: 2, 
+    borderColor: FishingTheme.colors.border 
+  },
+  distanceBtnActive: { 
+    backgroundColor: FishingTheme.colors.darkGreen, 
+    borderColor: FishingTheme.colors.darkGreen 
+  },
+  distanceBtnText: { 
+    color: FishingTheme.colors.darkGreen, 
+    textAlign: 'center', 
+    fontWeight: '700' 
+  },
+  distanceBtnTextActive: { color: FishingTheme.colors.cream },
   
   experienceButtons: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   boatButtons: { flexDirection: 'row', gap: 8 },
-  filterBtn: { backgroundColor: '#121A2B', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#233355' },
-  filterBtnActive: { backgroundColor: '#72E5A2', borderColor: '#72E5A2' },
-  filterBtnText: { color: '#E6F0FF', fontWeight: '600', fontSize: 12 },
-  filterBtnTextActive: { color: '#0B1220' },
+  filterBtn: { 
+    backgroundColor: FishingTheme.colors.card, 
+    paddingHorizontal: 12, 
+    paddingVertical: 8, 
+    borderRadius: 8, 
+    borderWidth: 2, 
+    borderColor: FishingTheme.colors.border 
+  },
+  filterBtnActive: { 
+    backgroundColor: FishingTheme.colors.darkGreen, 
+    borderColor: FishingTheme.colors.darkGreen 
+  },
+  filterBtnText: { 
+    color: FishingTheme.colors.darkGreen, 
+    fontWeight: '700', 
+    fontSize: 12 
+  },
+  filterBtnTextActive: { color: FishingTheme.colors.cream },
   
-  filtersFooter: { padding: 16, borderTopWidth: 1, borderTopColor: '#1E2A44' },
-  applyBtn: { backgroundColor: '#72E5A2', paddingVertical: 12, borderRadius: 12 },
-  applyBtnText: { color: '#0B1220', fontWeight: '700', textAlign: 'center' },
+  filtersFooter: { padding: 16, borderTopWidth: 2, borderTopColor: FishingTheme.colors.border },
+  applyBtn: { 
+    backgroundColor: FishingTheme.colors.darkGreen, 
+    paddingVertical: 12, 
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.forestGreen,
+  },
+  applyBtnText: { 
+    color: FishingTheme.colors.cream, 
+    fontWeight: '800', 
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
   
-  messageCard: { backgroundColor: '#0F1627', borderRadius: 18, borderWidth: 1, borderColor: '#22304D' },
-  messageHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#1E2A44' },
-  messageTitle: { color: '#E8ECF1', fontSize: 18, fontWeight: '700' },
+  messageCard: { 
+    backgroundColor: FishingTheme.colors.cream, 
+    borderRadius: 16, 
+    borderWidth: 2, 
+    borderColor: FishingTheme.colors.darkGreen 
+  },
+  messageHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    padding: 16, 
+    borderBottomWidth: 2, 
+    borderBottomColor: FishingTheme.colors.border 
+  },
+  messageTitle: { 
+    color: FishingTheme.colors.darkGreen, 
+    fontSize: 16, 
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    flex: 1,
+  },
   messageContent: { padding: 16 },
-  messageInput: { backgroundColor: '#121A2B', color: '#E6F0FF', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#233355', textAlignVertical: 'top', minHeight: 120 },
-  messageFooter: { padding: 16, borderTopWidth: 1, borderTopColor: '#1E2A44' },
-  sendBtn: { backgroundColor: '#72E5A2', paddingVertical: 12, borderRadius: 12 },
+  messageInput: { 
+    backgroundColor: FishingTheme.colors.card, 
+    color: FishingTheme.colors.text.primary, 
+    borderRadius: 12, 
+    padding: 12, 
+    borderWidth: 2, 
+    borderColor: FishingTheme.colors.border, 
+    textAlignVertical: 'top', 
+    minHeight: 120,
+    fontSize: 15,
+  },
+  messageFooter: { padding: 16, borderTopWidth: 2, borderTopColor: FishingTheme.colors.border },
+  sendBtn: { 
+    backgroundColor: FishingTheme.colors.darkGreen, 
+    paddingVertical: 12, 
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.forestGreen,
+  },
   sendBtnDisabled: { opacity: 0.5 },
-  sendBtnText: { color: '#0B1220', fontWeight: '700', textAlign: 'center' },
+  sendBtnText: { 
+    color: FishingTheme.colors.cream, 
+    fontWeight: '800', 
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
   
-  closeBtn: { padding: 8, borderRadius: 8, backgroundColor: '#121A2B', borderWidth: 1, borderColor: '#24324D' },
-  closeBtnText: { color: '#BFD2EE', fontSize: 13 },
+  closeBtn: { 
+    padding: 8, 
+    borderRadius: 8, 
+    backgroundColor: FishingTheme.colors.card, 
+    borderWidth: 2, 
+    borderColor: FishingTheme.colors.border,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeBtnText: { 
+    color: FishingTheme.colors.darkGreen, 
+    fontSize: 20,
+    fontWeight: '400',
+  },
 });

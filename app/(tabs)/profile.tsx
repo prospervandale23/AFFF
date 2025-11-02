@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FishingTheme } from '../../constants/FishingTheme';
 import { supabase } from '../../lib/supabase';
 
 interface SimpleProfile {
@@ -12,6 +14,9 @@ interface SimpleProfile {
   age: string;
   location: string;
   tackle_categories: string[];
+  rod: string;
+  reel: string;
+  line: string;
   experience_level: 'Beginner' | 'Intermediate' | 'Advanced' | null;
   has_boat: boolean;
   boat_type: string;
@@ -20,10 +25,18 @@ interface SimpleProfile {
   favorite_species: string[];
   profile_photo_url: string;
   preferred_fishing_times: string[];
+  tackle_details: {
+    lures: string;
+    bait: string;
+    hooks: string;
+    weights: string;
+    other_gear: string;
+  };
   fishing_type: 'freshwater' | 'saltwater' | null;
 }
 
 export default function ProfileScreen() {
+  const insets = useSafeAreaInsets();
   const { fishingType, species, tackleCategories } = useFishing();
   
   const [profile, setProfile] = useState<SimpleProfile>({
@@ -33,6 +46,9 @@ export default function ProfileScreen() {
     age: '',
     location: '',
     tackle_categories: [],
+    rod: '',
+    reel: '',
+    line: '',
     experience_level: null,
     has_boat: false,
     boat_type: '',
@@ -41,6 +57,13 @@ export default function ProfileScreen() {
     favorite_species: [],
     profile_photo_url: '',
     preferred_fishing_times: [],
+    tackle_details: {
+      lures: '',
+      bait: '',
+      hooks: '',
+      weights: '',
+      other_gear: ''
+    },
     fishing_type: fishingType
   });
   
@@ -55,7 +78,6 @@ export default function ProfileScreen() {
     initializeAuth();
   }, []);
 
-  // Update profile fishing type when context changes
   useEffect(() => {
     if (fishingType && profile.fishing_type !== fishingType) {
       setProfile(prev => ({ ...prev, fishing_type: fishingType }));
@@ -168,6 +190,9 @@ export default function ProfileScreen() {
           age: data.age?.toString() || '',
           location: data.location || '',
           tackle_categories: data.tackle_categories || [],
+          rod: data.rod || '',
+          reel: data.reel || '',
+          line: data.line || '',
           experience_level: data.experience_level,
           has_boat: data.has_boat || false,
           boat_type: data.boat_type || '',
@@ -176,6 +201,13 @@ export default function ProfileScreen() {
           favorite_species: data.favorite_species || [],
           profile_photo_url: data.profile_photo_url || '',
           preferred_fishing_times: data.preferred_fishing_times || [],
+          tackle_details: {
+            lures: data.tackle_details?.lures || '',
+            bait: data.tackle_details?.bait || '',
+            hooks: data.tackle_details?.hooks || '',
+            weights: data.tackle_details?.weights || '',
+            other_gear: data.tackle_details?.other_gear || ''
+          },
           fishing_type: data.fishing_type || fishingType
         });
       } else {
@@ -195,6 +227,9 @@ export default function ProfileScreen() {
       age: '',
       location: '',
       tackle_categories: [],
+      rod: '',
+      reel: '',
+      line: '',
       experience_level: null,
       has_boat: false,
       boat_type: '',
@@ -203,6 +238,13 @@ export default function ProfileScreen() {
       favorite_species: [],
       profile_photo_url: '',
       preferred_fishing_times: [],
+      tackle_details: {
+        lures: '',
+        bait: '',
+        hooks: '',
+        weights: '',
+        other_gear: ''
+      },
       fishing_type: fishingType
     });
   }
@@ -233,6 +275,9 @@ export default function ProfileScreen() {
           age: profile.age ? parseInt(profile.age) : null,
           location: profile.location,
           tackle_categories: profile.tackle_categories,
+          rod: profile.rod,
+          reel: profile.reel,
+          line: profile.line,
           experience_level: profile.experience_level,
           has_boat: profile.has_boat,
           boat_type: profile.boat_type,
@@ -241,6 +286,7 @@ export default function ProfileScreen() {
           favorite_species: profile.favorite_species,
           profile_photo_url: profile.profile_photo_url,
           preferred_fishing_times: profile.preferred_fishing_times,
+          tackle_details: profile.tackle_details,
           fishing_type: fishingType,
           updated_at: new Date().toISOString()
         });
@@ -323,7 +369,6 @@ export default function ProfileScreen() {
     setProfile(prev => ({ ...prev, favorite_species: updated }));
   }
 
-  // Loading state
   if (loading) {
     console.log('⏳ Rendering loading state');
     return (
@@ -333,12 +378,14 @@ export default function ProfileScreen() {
     );
   }
 
-  // Not signed in state
   if (!isSignedIn) {
     console.log('🔓 Rendering sign-in state');
     return (
-      <View style={[styles.container, styles.centered]}>
-        <Text style={styles.sectionTitle}>Welcome to Fishing Buddy!</Text>
+      <View style={[styles.container, styles.centered, { paddingTop: insets.top + 20 }]}>
+        <View style={styles.logoBox}>
+          <Text style={styles.logoText}>FB</Text>
+        </View>
+        <Text style={styles.sectionTitle}>FISHING BUDDY</Text>
         <Text style={styles.signInText}>
           Create your {fishingType} fishing profile and connect with other anglers instantly!
         </Text>
@@ -350,65 +397,64 @@ export default function ProfileScreen() {
         )}
         
         <Pressable style={styles.signInButton} onPress={signInAnonymously}>
-          <Text style={styles.signInButtonText}>Get Started</Text>
+          <Text style={styles.signInButtonText}>GET STARTED</Text>
         </Pressable>
       </View>
     );
   }
 
-  // Signed in state - show profile
   console.log('✅ Rendering signed-in profile state');
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.profileContent}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <ScrollView contentContainerStyle={[styles.profileContent, { paddingBottom: insets.bottom + 20 }]}>
         <View style={styles.headerRow}>
-          <Text style={styles.sectionTitle}>Your Profile</Text>
-          <View style={styles.headerButtons}>
+          <View>
+            <Text style={styles.sectionTitle}>YOUR PROFILE</Text>
             <View style={styles.fishingTypeBadge}>
               <Text style={styles.fishingTypeText}>
-                {fishingType === 'freshwater' ? '🏞️ Freshwater' : '🌊 Saltwater'}
+                {fishingType === 'freshwater' ? 'FRESHWATER' : 'SALTWATER'}
               </Text>
             </View>
-            <Pressable style={styles.signOutButton} onPress={signOut}>
-              <Text style={styles.signOutText}>Sign Out</Text>
-            </Pressable>
           </View>
+          <Pressable style={styles.signOutButton} onPress={signOut}>
+            <Text style={styles.signOutText}>SIGN OUT</Text>
+          </Pressable>
         </View>
         
         <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>Display Name</Text>
+          <Text style={styles.profileLabel}>DISPLAY NAME</Text>
           <Text style={styles.profileValue}>{profile.display_name || 'Not set'}</Text>
         </View>
 
         <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>Bio</Text>
+          <Text style={styles.profileLabel}>BIO</Text>
           <Text style={styles.profileValue}>{profile.bio || 'No bio yet'}</Text>
         </View>
 
         <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>Home Port</Text>
+          <Text style={styles.profileLabel}>HOME PORT</Text>
           <Text style={styles.profileValue}>{profile.home_port || 'Not set'}</Text>
         </View>
 
         <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>Age</Text>
+          <Text style={styles.profileLabel}>AGE</Text>
           <Text style={styles.profileValue}>{profile.age || 'Not set'}</Text>
         </View>
 
         <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>Experience Level</Text>
+          <Text style={styles.profileLabel}>EXPERIENCE LEVEL</Text>
           <Text style={styles.profileValue}>{profile.experience_level || 'Not set'}</Text>
         </View>
 
         <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>Has Boat</Text>
-          <Text style={styles.profileValue}>{profile.has_boat ? 'Yes 🚤' : 'No'}</Text>
+          <Text style={styles.profileLabel}>HAS BOAT</Text>
+          <Text style={styles.profileValue}>{profile.has_boat ? 'Yes' : 'No'}</Text>
         </View>
 
         {profile.has_boat && (
           <>
             <View style={styles.profileSection}>
-              <Text style={styles.profileLabel}>Boat Details</Text>
+              <Text style={styles.profileLabel}>BOAT DETAILS</Text>
               <Text style={styles.profileValue}>
                 {profile.boat_name || 'Unnamed'} • {profile.boat_type || 'Type not set'} • {profile.boat_length || 'Length not set'}
               </Text>
@@ -417,7 +463,7 @@ export default function ProfileScreen() {
         )}
 
         <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>Favorite Species</Text>
+          <Text style={styles.profileLabel}>FAVORITE SPECIES</Text>
           <View style={styles.tackleList}>
             {profile.favorite_species.length > 0 ? 
               profile.favorite_species.map(s => (
@@ -431,7 +477,7 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>Preferred Fishing Times</Text>
+          <Text style={styles.profileLabel}>PREFERRED FISHING TIMES</Text>
           <View style={styles.tackleList}>
             {profile.preferred_fishing_times.length > 0 ? 
               profile.preferred_fishing_times.map(time => (
@@ -445,7 +491,7 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>Tackle Categories</Text>
+          <Text style={styles.profileLabel}>TACKLE CATEGORIES</Text>
           <View style={styles.tackleList}>
             {profile.tackle_categories.length > 0 ? 
               profile.tackle_categories.map(t => (
@@ -459,7 +505,7 @@ export default function ProfileScreen() {
         </View>
 
         <Pressable style={styles.editButton} onPress={() => setSettingsOpen(true)}>
-          <Text style={styles.editButtonText}>Edit Profile</Text>
+          <Text style={styles.editButtonText}>EDIT PROFILE</Text>
         </Pressable>
       </ScrollView>
 
@@ -468,26 +514,26 @@ export default function ProfileScreen() {
         <View style={styles.settingsBackdrop}>
           <View style={styles.settingsCard}>
             <View style={styles.settingsHeader}>
-              <Text style={styles.settingsTitle}>Edit Profile</Text>
+              <Text style={styles.settingsTitle}>EDIT PROFILE</Text>
               <Pressable onPress={() => setSettingsOpen(false)} style={styles.xBtn}>
-                <Text style={styles.xBtnText}>✕</Text>
+                <Text style={styles.xBtnText}>×</Text>
               </Pressable>
             </View>
             
             <ScrollView contentContainerStyle={styles.settingsContent}>
-              <Text style={styles.label}>Display Name</Text>
+              <Text style={styles.label}>DISPLAY NAME</Text>
               <TextInput
                 placeholder="What should people call you?"
-                placeholderTextColor="#7E8BA0"
+                placeholderTextColor={FishingTheme.colors.text.muted}
                 value={profile.display_name}
                 onChangeText={(v) => setProfile(p => ({ ...p, display_name: v }))}
                 style={styles.input}
               />
 
-              <Text style={styles.label}>Bio</Text>
+              <Text style={styles.label}>BIO</Text>
               <TextInput
                 placeholder="Tell people about your fishing style..."
-                placeholderTextColor="#7E8BA0"
+                placeholderTextColor={FishingTheme.colors.text.muted}
                 value={profile.bio}
                 onChangeText={(v) => setProfile(p => ({ ...p, bio: v }))}
                 style={[styles.input, styles.textArea]}
@@ -495,35 +541,35 @@ export default function ProfileScreen() {
                 numberOfLines={3}
               />
 
-              <Text style={styles.label}>Home Port</Text>
+              <Text style={styles.label}>HOME PORT</Text>
               <TextInput
                 placeholder={fishingType === 'freshwater' ? "e.g., Lake George, NY" : "e.g., Point Judith, RI"}
-                placeholderTextColor="#7E8BA0"
+                placeholderTextColor={FishingTheme.colors.text.muted}
                 value={profile.home_port}
                 onChangeText={(v) => setProfile(p => ({ ...p, home_port: v }))}
                 style={styles.input}
               />
 
-              <Text style={styles.label}>Age</Text>
+              <Text style={styles.label}>AGE</Text>
               <TextInput
                 placeholder="Your age"
-                placeholderTextColor="#7E8BA0"
+                placeholderTextColor={FishingTheme.colors.text.muted}
                 value={profile.age}
                 onChangeText={(v) => setProfile(p => ({ ...p, age: v }))}
                 style={styles.input}
                 keyboardType="numeric"
               />
 
-              <Text style={styles.label}>Location</Text>
+              <Text style={styles.label}>LOCATION</Text>
               <TextInput
                 placeholder="City, State"
-                placeholderTextColor="#7E8BA0"
+                placeholderTextColor={FishingTheme.colors.text.muted}
                 value={profile.location}
                 onChangeText={(v) => setProfile(p => ({ ...p, location: v }))}
                 style={styles.input}
               />
 
-              <Text style={styles.label}>Experience Level</Text>
+              <Text style={styles.label}>EXPERIENCE LEVEL</Text>
               <View style={styles.chipsWrap}>
                 {(['Beginner', 'Intermediate', 'Advanced'] as const).map(level => {
                   const active = profile.experience_level === level;
@@ -539,7 +585,7 @@ export default function ProfileScreen() {
                 })}
               </View>
 
-              <Text style={styles.label}>Favorite Species</Text>
+              <Text style={styles.label}>FAVORITE SPECIES</Text>
               <View style={styles.chipsWrap}>
                 {species.map(s => {
                   const active = profile.favorite_species.includes(s);
@@ -555,7 +601,7 @@ export default function ProfileScreen() {
                 })}
               </View>
 
-              <Text style={styles.label}>Tackle Categories</Text>
+              <Text style={styles.label}>TACKLE CATEGORIES</Text>
               <View style={styles.chipsWrap}>
                 {tackleCategories.map(t => {
                   const active = profile.tackle_categories.includes(t);
@@ -567,28 +613,28 @@ export default function ProfileScreen() {
                 })}
               </View>
 
-              <Text style={styles.label}>Has Boat</Text>
+              <Text style={styles.label}>HAS BOAT</Text>
               <Pressable 
                 onPress={() => setProfile(p => ({ ...p, has_boat: !p.has_boat }))}
                 style={[styles.chip, profile.has_boat ? styles.chipActive : styles.chipIdle]}
               >
                 <Text style={profile.has_boat ? styles.chipTextActive : styles.chipTextIdle}>
-                  {profile.has_boat ? 'Yes, I have a boat 🚤' : 'No boat'}
+                  {profile.has_boat ? 'Yes, I have a boat' : 'No boat'}
                 </Text>
               </Pressable>
 
               {profile.has_boat && (
                 <>
-                  <Text style={styles.label}>Boat Name</Text>
+                  <Text style={styles.label}>BOAT NAME</Text>
                   <TextInput
                     placeholder="e.g., Sea Hunter, Miss Sarah"
-                    placeholderTextColor="#7E8BA0"
+                    placeholderTextColor={FishingTheme.colors.text.muted}
                     value={profile.boat_name}
                     onChangeText={(v) => setProfile(p => ({ ...p, boat_name: v }))}
                     style={styles.input}
                   />
 
-                  <Text style={styles.label}>Boat Type</Text>
+                  <Text style={styles.label}>BOAT TYPE</Text>
                   <View style={styles.chipsWrap}>
                     {(fishingType === 'freshwater' 
                       ? ['Bass Boat', 'Jon Boat', 'Pontoon', 'Kayak', 'Canoe', 'Other']
@@ -607,7 +653,7 @@ export default function ProfileScreen() {
                     })}
                   </View>
 
-                  <Text style={styles.label}>Boat Length</Text>
+                  <Text style={styles.label}>BOAT LENGTH</Text>
                   <View style={styles.chipsWrap}>
                     {['Under 20ft', '20-25ft', '26-30ft', '31-35ft', '36-40ft', '40ft+'].map(length => {
                       const active = profile.boat_length === length;
@@ -625,7 +671,7 @@ export default function ProfileScreen() {
                 </>
               )}
 
-              <Text style={styles.label}>Preferred Fishing Times</Text>
+              <Text style={styles.label}>PREFERRED FISHING TIMES</Text>
               <View style={styles.chipsWrap}>
                 {['Early Morning', 'Morning', 'Afternoon', 'Evening', 'Night', 'Dawn', 'Dusk', 'Weekends Only'].map(time => {
                   const active = profile.preferred_fishing_times.includes(time);
@@ -646,87 +692,367 @@ export default function ProfileScreen() {
                   );
                 })}
               </View>
+
+              <Text style={styles.sectionHeader}>GEAR DETAILS</Text>
+              
+              <Text style={styles.label}>ROD</Text>
+              <TextInput
+                placeholder={fishingType === 'freshwater' ? "e.g., 7' Medium St. Croix" : "e.g., 7' Heavy Penn"}
+                placeholderTextColor={FishingTheme.colors.text.muted}
+                value={profile.rod}
+                onChangeText={(v) => setProfile(p => ({ ...p, rod: v }))}
+                style={styles.input}
+              />
+
+              <Text style={styles.label}>REEL</Text>
+              <TextInput
+                placeholder={fishingType === 'freshwater' ? "e.g., Shimano 2500" : "e.g., Penn Spinfisher VI 4500"}
+                placeholderTextColor={FishingTheme.colors.text.muted}
+                value={profile.reel}
+                onChangeText={(v) => setProfile(p => ({ ...p, reel: v }))}
+                style={styles.input}
+              />
+
+              <Text style={styles.label}>LINE</Text>
+              <TextInput
+                placeholder={fishingType === 'freshwater' ? "e.g., 12lb fluorocarbon" : "e.g., 30lb braid"}
+                placeholderTextColor={FishingTheme.colors.text.muted}
+                value={profile.line}
+                onChangeText={(v) => setProfile(p => ({ ...p, line: v }))}
+                style={styles.input}
+              />
+
+              <Text style={styles.label}>LURES & SOFT PLASTICS</Text>
+              <TextInput
+                placeholder={fishingType === 'freshwater' 
+                  ? "e.g., Senkos, Spinnerbaits, Crankbaits" 
+                  : "e.g., Spooks, Bucktails, Gulp, Swimmers"}
+                placeholderTextColor={FishingTheme.colors.text.muted}
+                value={profile.tackle_details.lures}
+                onChangeText={(v) => setProfile(p => ({ 
+                  ...p, 
+                  tackle_details: { ...p.tackle_details, lures: v }
+                }))}
+                style={styles.input}
+              />
+
+              <Text style={styles.label}>BAIT</Text>
+              <TextInput
+                placeholder={fishingType === 'freshwater'
+                  ? "e.g., Nightcrawlers, Minnows, Leeches"
+                  : "e.g., Live eels, Bunker, Squid, Clams"}
+                placeholderTextColor={FishingTheme.colors.text.muted}
+                value={profile.tackle_details.bait}
+                onChangeText={(v) => setProfile(p => ({ 
+                  ...p, 
+                  tackle_details: { ...p.tackle_details, bait: v }
+                }))}
+                style={styles.input}
+              />
+
+              <Text style={styles.label}>HOOKS</Text>
+              <TextInput
+                placeholder={fishingType === 'freshwater'
+                  ? "e.g., Offset worm hooks, Trebles"
+                  : "e.g., Circle hooks 8/0, J-hooks 2/0"}
+                placeholderTextColor={FishingTheme.colors.text.muted}
+                value={profile.tackle_details.hooks}
+                onChangeText={(v) => setProfile(p => ({ 
+                  ...p, 
+                  tackle_details: { ...p.tackle_details, hooks: v }
+                }))}
+                style={styles.input}
+              />
+
+              <Text style={styles.label}>WEIGHTS & SINKERS</Text>
+              <TextInput
+                placeholder={fishingType === 'freshwater'
+                  ? "e.g., Bullet weights, Split shot"
+                  : "e.g., Bank sinkers, Egg sinkers, Jig heads"}
+                placeholderTextColor={FishingTheme.colors.text.muted}
+                value={profile.tackle_details.weights}
+                onChangeText={(v) => setProfile(p => ({ 
+                  ...p, 
+                  tackle_details: { ...p.tackle_details, weights: v }
+                }))}
+                style={styles.input}
+              />
+
+              <Text style={styles.label}>OTHER GEAR</Text>
+              <TextInput
+                placeholder="e.g., Net, Pliers, Tackle box, Cooler"
+                placeholderTextColor={FishingTheme.colors.text.muted}
+                value={profile.tackle_details.other_gear}
+                onChangeText={(v) => setProfile(p => ({ 
+                  ...p, 
+                  tackle_details: { ...p.tackle_details, other_gear: v }
+                }))}
+                style={styles.input}
+              />
             </ScrollView>
 
             <View style={styles.settingsFooter}>
               <Pressable 
                 onPress={saveProfile} 
-               style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
-               disabled={saving}
-             >
-               <Text style={styles.saveBtnText}>{saving ? 'Saving...' : 'Save Profile'}</Text>
-             </Pressable>
-           </View>
-         </View>
-       </View>
-     </Modal>
-   </View>
- );
+                style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+                disabled={saving}
+              >
+                <Text style={styles.saveBtnText}>{saving ? 'SAVING...' : 'SAVE PROFILE'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
- container: { flex: 1, backgroundColor: '#0B1220' },
- centered: { justifyContent: 'center', alignItems: 'center', padding: 20 },
- profileContent: { padding: 20, gap: 20 },
- headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
- headerButtons: { flexDirection: 'row', gap: 8, alignItems: 'center' },
- sectionTitle: { color: '#E8ECF1', fontSize: 18, fontWeight: '700', marginBottom: 8 },
- profileSection: { gap: 8 },
- profileLabel: { fontSize: 14, color: '#AFC3E1', fontWeight: '600' },
- profileValue: { fontSize: 16, color: '#E8ECF1' },
- tackleList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
- tackleChip: { backgroundColor: '#72E5A2', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
- tackleChipText: { fontSize: 12, color: '#0B1220', fontWeight: '700' },
- 
- fishingTypeBadge: { 
-   backgroundColor: '#1A2440', 
-   paddingHorizontal: 12, 
-   paddingVertical: 6, 
-   borderRadius: 12,
-   borderWidth: 1,
-   borderColor: '#2A3A63'
- },
- fishingTypeText: { color: '#72E5A2', fontSize: 12, fontWeight: '600' },
- 
- loadingText: { color: '#E8ECF1', fontSize: 16 },
- signInText: { color: '#9BB0CC', fontSize: 16, textAlign: 'center', marginBottom: 20, lineHeight: 22 },
- signInButton: { backgroundColor: '#72E5A2', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
- signInButtonText: { color: '#0B1220', fontWeight: '700', fontSize: 16 },
- signOutButton: { backgroundColor: '#FF6B6B', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
- signOutText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' },
- errorText: { color: '#FF8A8A', fontSize: 14, textAlign: 'center', marginBottom: 16, paddingHorizontal: 20 },
- 
- editButton: {
-   backgroundColor: '#1A2440',
-   borderRadius: 12,
-   paddingHorizontal: 16,
-   paddingVertical: 12,
-   marginTop: 20,
-   alignSelf: 'center',
-   borderWidth: 1,
-   borderColor: '#2A3A63',
- },
- editButtonText: { color: '#E9F2FF', fontWeight: '700' },
- 
- // Settings modal styles
- settingsBackdrop: { flex: 1, backgroundColor: 'rgba(6,10,18,0.7)', justifyContent: 'center', padding: 16 },
- settingsCard: { backgroundColor: '#0F1627', borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: '#22304D', maxHeight: '86%' },
- settingsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1E2A44' },
- settingsTitle: { color: '#E8ECF1', fontSize: 16, fontWeight: '700' },
- xBtn: { padding: 8, borderRadius: 8, backgroundColor: '#121A2B', borderWidth: 1, borderColor: '#24324D' },
- xBtnText: { color: '#BFD2EE', fontSize: 13 },
- settingsContent: { padding: 16, gap: 10 },
- label: { color: '#AFC3E1', fontSize: 12, marginTop: 6 },
- input: { backgroundColor: '#121A2B', color: '#E6F0FF', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#233355' },
- textArea: { height: 80, textAlignVertical: 'top' },
- chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
- chip: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
- chipIdle: { backgroundColor: '#0F1627', borderColor: '#263654' },
- chipActive: { backgroundColor: '#72E5A2', borderColor: '#72E5A2' },
- chipTextIdle: { color: '#B7C7E0', fontWeight: '600', fontSize: 12 },
- chipTextActive: { color: '#0B1220', fontWeight: '800', fontSize: 12 },
- settingsFooter: { padding: 12, borderTopWidth: 1, borderTopColor: '#1E2A44' },
- saveBtn: { alignSelf: 'flex-end', backgroundColor: '#1A2440', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: '#2A3A63' },
- saveBtnDisabled: { opacity: 0.5 },
- saveBtnText: { color: '#E9F2FF', fontWeight: '700' },
+  container: { flex: 1, backgroundColor: FishingTheme.colors.background },
+  centered: { justifyContent: 'center', alignItems: 'center', padding: 20 },
+  
+  logoBox: {
+    width: 80,
+    height: 80,
+    backgroundColor: FishingTheme.colors.darkGreen,
+    borderRadius: 16,
+    borderWidth: 3,
+    borderColor: FishingTheme.colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  logoText: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: FishingTheme.colors.cream,
+    letterSpacing: 2,
+  },
+  
+  profileContent: { padding: 20, gap: 20 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  sectionTitle: { 
+    color: FishingTheme.colors.darkGreen, 
+    fontSize: 24, 
+    fontWeight: '800', 
+    marginBottom: 8,
+    letterSpacing: 1,
+  },
+  
+  fishingTypeBadge: { 
+    backgroundColor: FishingTheme.colors.card, 
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.border,
+    alignSelf: 'flex-start',
+  },
+  fishingTypeText: { 
+    color: FishingTheme.colors.darkGreen, 
+    fontSize: 11, 
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  
+  profileSection: { gap: 8 },
+  profileLabel: { 
+    fontSize: 11, 
+    color: FishingTheme.colors.text.tertiary, 
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  profileValue: { fontSize: 16, color: FishingTheme.colors.text.primary, fontWeight: '500' },
+  tackleList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tackleChip: { 
+    backgroundColor: FishingTheme.colors.darkGreen, 
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.forestGreen,
+  },
+  tackleChipText: { 
+    fontSize: 12, 
+    color: FishingTheme.colors.cream, 
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  
+  loadingText: { color: FishingTheme.colors.text.primary, fontSize: 16 },
+  signInText: { 
+    color: FishingTheme.colors.text.secondary, 
+    fontSize: 16, 
+    textAlign: 'center', 
+    marginBottom: 20, 
+    lineHeight: 22,
+    maxWidth: 300,
+  },
+  signInButton: { 
+    backgroundColor: FishingTheme.colors.darkGreen, 
+    paddingHorizontal: 24, 
+    paddingVertical: 12, 
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.forestGreen,
+  },
+  signInButtonText: { 
+    color: FishingTheme.colors.cream, 
+    fontWeight: '800', 
+    fontSize: 16,
+    letterSpacing: 0.5,
+  },
+  signOutButton: { 
+    backgroundColor: FishingTheme.colors.status.poor, 
+    paddingHorizontal: 12, 
+    paddingVertical: 8, 
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.border,
+  },
+  signOutText: { 
+    color: FishingTheme.colors.cream, 
+    fontSize: 11, 
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  errorText: { 
+    color: FishingTheme.colors.status.poor, 
+    fontSize: 14, 
+    textAlign: 'center', 
+    marginBottom: 16, 
+    paddingHorizontal: 20 
+  },
+  
+  editButton: {
+    backgroundColor: FishingTheme.colors.darkGreen,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginTop: 20,
+    alignSelf: 'center',
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.forestGreen,
+  },
+  editButtonText: { 
+    color: FishingTheme.colors.cream, 
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  
+  // Settings modal
+  settingsBackdrop: { 
+    flex: 1, 
+    backgroundColor: FishingTheme.colors.overlay, 
+    justifyContent: 'center', 
+    padding: 16 
+  },
+  settingsCard: { 
+    backgroundColor: FishingTheme.colors.cream, 
+    borderRadius: 18, 
+    overflow: 'hidden', 
+    borderWidth: 2, 
+    borderColor: FishingTheme.colors.darkGreen, 
+    maxHeight: '86%' 
+  },
+  settingsHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingHorizontal: 16, 
+    paddingVertical: 12, 
+    borderBottomWidth: 2, 
+    borderBottomColor: FishingTheme.colors.border 
+  },
+  settingsTitle: { 
+    color: FishingTheme.colors.darkGreen, 
+    fontSize: 18, 
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  xBtn: { 
+    padding: 8, 
+    borderRadius: 8, 
+    backgroundColor: FishingTheme.colors.card, 
+    borderWidth: 2, 
+    borderColor: FishingTheme.colors.border,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  xBtnText: { 
+    color: FishingTheme.colors.darkGreen, 
+    fontSize: 20,
+    fontWeight: '400',
+  },
+  settingsContent: { padding: 16, gap: 10 },
+  label: { 
+    color: FishingTheme.colors.text.tertiary, 
+    fontSize: 11, 
+    marginTop: 6,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  input: { 
+    backgroundColor: FishingTheme.colors.card, 
+    color: FishingTheme.colors.text.primary, 
+    borderRadius: 12, 
+    paddingHorizontal: 12, 
+    paddingVertical: 10, 
+    borderWidth: 2, 
+    borderColor: FishingTheme.colors.border,
+    fontSize: 15,
+  },
+  textArea: { height: 80, textAlignVertical: 'top' },
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  chip: { 
+    paddingHorizontal: 10, 
+    paddingVertical: 8, 
+    borderRadius: 999, 
+    borderWidth: 2 
+  },
+  chipIdle: { 
+    backgroundColor: FishingTheme.colors.card, 
+    borderColor: FishingTheme.colors.border 
+  },
+  chipActive: { 
+    backgroundColor: FishingTheme.colors.darkGreen, 
+    borderColor: FishingTheme.colors.darkGreen 
+  },
+  chipTextIdle: { 
+    color: FishingTheme.colors.text.secondary, 
+    fontWeight: '600', 
+    fontSize: 12 
+  },
+  chipTextActive: { 
+    color: FishingTheme.colors.cream, 
+    fontWeight: '800', 
+    fontSize: 12,
+    letterSpacing: 0.3,
+  },
+  settingsFooter: { padding: 12, borderTopWidth: 2, borderTopColor: FishingTheme.colors.border },
+  saveBtn: { 
+    alignSelf: 'flex-end', 
+    backgroundColor: FishingTheme.colors.darkGreen, 
+    borderRadius: 12, 
+    paddingHorizontal: 16, 
+    paddingVertical: 10, 
+    borderWidth: 2, 
+    borderColor: FishingTheme.colors.forestGreen 
+  },
+  saveBtnDisabled: { opacity: 0.5 },
+  saveBtnText: { 
+    color: FishingTheme.colors.cream, 
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  sectionHeader: { 
+    color: FishingTheme.colors.darkGreen, 
+    fontSize: 16, 
+    fontWeight: '800', 
+    marginTop: 16, 
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
 });
