@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Fishing Buddy",
-    "slug": "fishing-buddy", 
+    "slug": "fishing-buddy",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -59,7 +59,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow Fishing Buddy to use your location to find nearby fishing buddies."
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

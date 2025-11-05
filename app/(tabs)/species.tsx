@@ -1,14 +1,16 @@
+import { FishingTheme } from '@/constants/FishingTheme';
 import { useFishing } from '@/contexts/FishingContext';
 import React, { useState } from 'react';
 import {
-    FlatList,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View
+  FlatList,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface SpeciesInfo {
   id: string;
@@ -29,12 +31,12 @@ interface LureInfo {
   priceRange: string;
   effectiveness: 'High' | 'Medium' | 'Low';
   description: string;
-  tips:string; // Optional tips for use
-  comments?: string; // Optional user comments
-  affiliateUrl?: string; // For future revenue
+  tips: string;
+  comments?: string;
+  affiliateUrl?: string;
 }
 
-// Sample species data - would come from your database
+// Sample species data
 const freshwaterSpecies: SpeciesInfo[] = [
   {
     id: 'largemouth-bass',
@@ -154,7 +156,7 @@ const saltwaterSpecies: SpeciesInfo[] = [
         priceRange: '$22-30',
         effectiveness: 'High',
         description: 'Exciting surface action during feeding frenzies',
-        tips: 'Use during low light conditions over shallow structurefor best results.',
+        tips: 'Use during low light conditions over shallow structure for best results.',
         comments: 'Great for early morning or late evening topwater action.'
       }
     ]
@@ -176,7 +178,7 @@ const saltwaterSpecies: SpeciesInfo[] = [
         priceRange: '$5-10',
         effectiveness: 'High',
         description: 'Bucktail jig tipped with Gulp! soft bait',
-        tips: 'Very Bucktail and gulp color',
+        tips: 'Vary bucktail and gulp color',
         comments: 'Really targets fluke for some reason.'
       },
       {
@@ -193,15 +195,69 @@ const saltwaterSpecies: SpeciesInfo[] = [
         type: 'Jig',
         priceRange: '$8-15',
         effectiveness: 'High',
-        description: 'classic Hogy sandeel jig... It works!',
+        description: 'Classic Hogy sandeel jig... It works!',
         tips: 'Jig in an area where the bottom is sandy and leave if Sea Robins start to bite.',
-        comments: 'prone to bycatch, and can snag easily',
+        comments: 'Prone to bycatch, and can snag easily',
+      }
+    ]
+  },
+    {
+    id: 'tautog',
+    name: 'Tautog (Blackfish)',
+    slotSize: '16" minimum',
+    description: 'Hard-fighting bottom fish known for their strength and skill in stealing bait.',
+    habitat: 'Reefs, Wrecks, Jetties and Rock Piles',
+    feedingTimes: ['Slack tide', 'Mid-Day', 'Late afternoon'],
+    baitfish: ['Crabs', 'Mussels', 'Lobsters', 'Peanut-Bunker'],
+    seasonality: 'Early spring and late fall in shallow water',
+    bestTimes: 'Slack tide around rocky structure',
+    lures: [
+      {
+        name: 'Tautog Jig with half crab',
+        type: 'Jig Combo',
+        priceRange: '$5-10',
+        effectiveness: 'High',
+        description: 'A crab cut in half and put over the hook of a tautog jig',
+        tips: 'Vary jig color and weight based on current, depth, and water clarity',
+        comments: 'Use scissors to cut the crab in half, remove legs, and hook through the leg holes for best bait retention.'
+      }
+    ]
+  },
+    {
+    id: 'Scup',
+    name: 'Porgy (Scup)',
+    slotSize: '9" minimum',
+    description: 'Abundant fish easily targeted from shore.',
+    habitat: 'Sandy bottoms, drop-offs, channels, and structure edges',
+    feedingTimes: ['Moving tides', 'Early morning', 'Late afternoon'],
+    baitfish: ['Sand Worms', 'Squid', 'Clams', 'Killifish'],
+    seasonality: 'Late spring through early fall in shallow water, especially around sandy bottoms',
+    bestTimes: 'Moving tides in the middle of the day',
+    lures: [
+      {
+        name: 'Hi-Lo Rig with sandworm',
+        type: 'Bait Rig',
+        priceRange: '$2-5',
+        effectiveness: 'High',
+        description: 'Sinker tied below two j-hooks tipped with sandworms',
+        tips: 'Try to get bait onto a sandy patch near the edge of a reef or by some pilings.',
+        comments: 'Scup have hard small mouths, so use smaller hooks and let them eat the bait.'
+      },
+      {
+        name: 'Bucktail with Squid',
+        type: 'Jig Combo',
+        priceRange: '$4-8',
+        effectiveness: 'High',
+        description: 'Bucktail jig tipped with strip of squid',
+        tips: 'Tip a pink or white bucktail with a whole squid head',
+        comments: 'A tried-and-true method for fluke fishing.'
       }
     ]
   }
 ];
 
 export default function SpeciesScreen() {
+  const insets = useSafeAreaInsets();
   const { fishingType } = useFishing();
   const [selectedSpecies, setSelectedSpecies] = useState<SpeciesInfo | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -215,18 +271,18 @@ export default function SpeciesScreen() {
 
   const getEffectivenessColor = (effectiveness: string) => {
     switch (effectiveness) {
-      case 'High': return '#72E5A2';
-      case 'Medium': return '#FFD93D';
-      case 'Low': return '#FF8A8A';
-      default: return '#9BB0CC';
+      case 'High': return FishingTheme.colors.status.excellent;
+      case 'Medium': return FishingTheme.colors.status.good;
+      case 'Low': return FishingTheme.colors.status.fair;
+      default: return FishingTheme.colors.text.muted;
     }
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Text style={styles.title}>
-          {fishingType === 'freshwater' ? '🏞️ Freshwater' : '🌊 Saltwater'} Species Guide
+          {fishingType === 'freshwater' ? 'FRESHWATER' : 'SALTWATER'} SPECIES GUIDE
         </Text>
         <Text style={styles.subtitle}>
           Local regulations, feeding habits, and proven lures
@@ -236,7 +292,7 @@ export default function SpeciesScreen() {
       <FlatList
         data={speciesList}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
+        contentContainerStyle={[styles.listContainer, { paddingBottom: insets.bottom + 20 }]}
         renderItem={({ item }) => (
           <Pressable
             style={styles.speciesCard}
@@ -244,16 +300,21 @@ export default function SpeciesScreen() {
           >
             <View style={styles.speciesHeader}>
               <Text style={styles.speciesName}>{item.name}</Text>
-              <Text style={styles.slotSize}>{item.slotSize}</Text>
+              <View style={styles.slotBadge}>
+                <Text style={styles.slotSize}>{item.slotSize}</Text>
+              </View>
             </View>
             <Text style={styles.speciesDescription} numberOfLines={2}>
               {item.description}
             </Text>
             <View style={styles.speciesFooter}>
-              <Text style={styles.feedingTime}>
-                🕐 {item.feedingTimes.slice(0, 2).join(' • ')}
-              </Text>
-              <Text style={styles.tapHint}>Tap for details →</Text>
+              <View style={styles.feedingTimeContainer}>
+                <Text style={styles.feedingLabel}>BEST TIMES:</Text>
+                <Text style={styles.feedingTime}>
+                  {item.feedingTimes.slice(0, 2).join(' • ')}
+                </Text>
+              </View>
+              <Text style={styles.tapHint}>TAP FOR DETAILS →</Text>
             </View>
           </Pressable>
         )}
@@ -267,31 +328,31 @@ export default function SpeciesScreen() {
         onRequestClose={() => setModalVisible(false)}
       >
         {selectedSpecies && (
-          <View style={styles.modalContainer}>
+          <View style={[styles.modalContainer, { paddingTop: insets.top }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{selectedSpecies.name}</Text>
+              <Text style={styles.modalTitle}>{selectedSpecies.name.toUpperCase()}</Text>
               <Pressable
                 style={styles.closeButton}
                 onPress={() => setModalVisible(false)}
               >
-                <Text style={styles.closeButtonText}>✕</Text>
+                <Text style={styles.closeButtonText}>×</Text>
               </Pressable>
             </View>
 
-            <ScrollView contentContainerStyle={styles.modalContent}>
+            <ScrollView contentContainerStyle={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
               <View style={styles.regulationSection}>
-                <Text style={styles.sectionTitle}>Legal Size</Text>
+                <Text style={styles.regulationLabel}>LEGAL SIZE</Text>
                 <Text style={styles.slotSizeLarge}>{selectedSpecies.slotSize}</Text>
               </View>
 
               <View style={styles.infoSection}>
-                <Text style={styles.sectionTitle}>Habitat & Behavior</Text>
+                <Text style={styles.sectionTitle}>HABITAT & BEHAVIOR</Text>
                 <Text style={styles.infoText}>{selectedSpecies.description}</Text>
                 <Text style={styles.infoText}>{selectedSpecies.habitat}</Text>
               </View>
 
               <View style={styles.infoSection}>
-                <Text style={styles.sectionTitle}>Feeding Times</Text>
+                <Text style={styles.sectionTitle}>FEEDING TIMES</Text>
                 <View style={styles.chipContainer}>
                   {selectedSpecies.feedingTimes.map((time) => (
                     <View key={time} style={styles.timeChip}>
@@ -302,7 +363,7 @@ export default function SpeciesScreen() {
               </View>
 
               <View style={styles.infoSection}>
-                <Text style={styles.sectionTitle}>Natural Bait</Text>
+                <Text style={styles.sectionTitle}>NATURAL BAIT</Text>
                 <View style={styles.chipContainer}>
                   {selectedSpecies.baitfish.map((bait) => (
                     <View key={bait} style={styles.baitChip}>
@@ -313,7 +374,7 @@ export default function SpeciesScreen() {
               </View>
 
               <View style={styles.infoSection}>
-                <Text style={styles.sectionTitle}>Recommended Lures</Text>
+                <Text style={styles.sectionTitle}>RECOMMENDED LURES</Text>
                 {selectedSpecies.lures.map((lure, index) => (
                   <View key={index} style={styles.lureCard}>
                     <View style={styles.lureHeader}>
@@ -326,7 +387,7 @@ export default function SpeciesScreen() {
                           ]}
                         >
                           <Text style={styles.effectivenessText}>
-                            {lure.effectiveness}
+                            {lure.effectiveness.toUpperCase()}
                           </Text>
                         </View>
                         <Text style={styles.priceText}>{lure.priceRange}</Text>
@@ -335,16 +396,28 @@ export default function SpeciesScreen() {
                     <Text style={styles.lureType}>{lure.type}</Text>
                     <Text style={styles.lureDescription}>{lure.description}</Text>
                     
-                    {/* Future affiliate link button */}
+                    {lure.tips && (
+                      <View style={styles.tipsContainer}>
+                        <Text style={styles.tipsLabel}>TIP:</Text>
+                        <Text style={styles.tipsText}>{lure.tips}</Text>
+                      </View>
+                    )}
+                    
+                    {lure.comments && (
+                      <View style={styles.commentsContainer}>
+                        <Text style={styles.commentsText}>"{lure.comments}"</Text>
+                      </View>
+                    )}
+                    
                     <Pressable style={styles.buyButton}>
-                      <Text style={styles.buyButtonText}>🛒 Available Soon!</Text>
+                      <Text style={styles.buyButtonText}>AVAILABLE SOON</Text>
                     </Pressable>
                   </View>
                 ))}
               </View>
 
               <View style={styles.infoSection}>
-                <Text style={styles.sectionTitle}>Best Times & Conditions</Text>
+                <Text style={styles.sectionTitle}>BEST TIMES & CONDITIONS</Text>
                 <Text style={styles.infoText}>{selectedSpecies.bestTimes}</Text>
                 <Text style={styles.infoText}>{selectedSpecies.seasonality}</Text>
               </View>
@@ -359,34 +432,37 @@ export default function SpeciesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0B1220',
+    backgroundColor: FishingTheme.colors.background,
   },
   header: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1E2A44',
+    borderBottomWidth: 2,
+    borderBottomColor: FishingTheme.colors.border,
   },
   title: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#E8ECF1',
+    fontWeight: '800',
+    color: FishingTheme.colors.darkGreen,
     marginBottom: 4,
+    letterSpacing: 1,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#9BB0CC',
+    fontSize: 13,
+    color: FishingTheme.colors.text.tertiary,
+    fontWeight: '500',
   },
   listContainer: {
     padding: 20,
     gap: 12,
   },
   speciesCard: {
-    backgroundColor: '#121A2B',
+    backgroundColor: FishingTheme.colors.card,
     borderRadius: 16,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#1E2A44',
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.border,
+    ...FishingTheme.shadows.sm,
   },
   speciesHeader: {
     flexDirection: 'row',
@@ -396,18 +472,28 @@ const styles = StyleSheet.create({
   },
   speciesName: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#E8ECF1',
+    fontWeight: '800',
+    color: FishingTheme.colors.darkGreen,
     flex: 1,
+    letterSpacing: 0.3,
+  },
+  slotBadge: {
+    backgroundColor: FishingTheme.colors.background,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.border,
   },
   slotSize: {
-    fontSize: 12,
-    color: '#9BB0CC',
-    fontWeight: '600',
+    fontSize: 11,
+    color: FishingTheme.colors.text.secondary,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   speciesDescription: {
     fontSize: 14,
-    color: '#AFC3E1',
+    color: FishingTheme.colors.text.secondary,
     lineHeight: 20,
     marginBottom: 12,
   },
@@ -416,20 +502,32 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  feedingTimeContainer: {
+    flex: 1,
+  },
+  feedingLabel: {
+    fontSize: 10,
+    color: FishingTheme.colors.text.tertiary,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
   feedingTime: {
     fontSize: 12,
-    color: '#72E5A2',
+    color: FishingTheme.colors.darkGreen,
     fontWeight: '600',
   },
   tapHint: {
-    fontSize: 12,
-    color: '#7E8BA0',
+    fontSize: 11,
+    color: FishingTheme.colors.text.muted,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   
   // Modal styles
   modalContainer: {
     flex: 1,
-    backgroundColor: '#0B1220',
+    backgroundColor: FishingTheme.colors.background,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -437,53 +535,70 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1E2A44',
+    borderBottomWidth: 2,
+    borderBottomColor: FishingTheme.colors.border,
   },
   modalTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#E8ECF1',
+    fontSize: 20,
+    fontWeight: '800',
+    color: FishingTheme.colors.darkGreen,
     flex: 1,
+    letterSpacing: 1,
   },
   closeButton: {
     padding: 8,
     borderRadius: 8,
-    backgroundColor: '#1A2440',
+    backgroundColor: FishingTheme.colors.card,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.border,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   closeButtonText: {
-    color: '#E8ECF1',
-    fontSize: 16,
-    fontWeight: '600',
+    color: FishingTheme.colors.darkGreen,
+    fontSize: 20,
+    fontWeight: '400',
   },
   modalContent: {
     padding: 20,
     gap: 20,
   },
   regulationSection: {
-    backgroundColor: '#1A2440',
+    backgroundColor: FishingTheme.colors.card,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2A3A63',
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.darkGreen,
+    borderLeftWidth: 6,
+  },
+  regulationLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: FishingTheme.colors.text.tertiary,
+    marginBottom: 4,
+    letterSpacing: 1,
   },
   slotSizeLarge: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#FFD93D',
+    fontWeight: '800',
+    color: FishingTheme.colors.darkGreen,
+    letterSpacing: 0.5,
   },
   infoSection: {
     gap: 12,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#E8ECF1',
+    fontSize: 14,
+    fontWeight: '800',
+    color: FishingTheme.colors.darkGreen,
+    letterSpacing: 0.8,
   },
   infoText: {
     fontSize: 14,
-    color: '#AFC3E1',
+    color: FishingTheme.colors.text.secondary,
     lineHeight: 20,
   },
   chipContainer: {
@@ -492,48 +607,53 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   timeChip: {
-    backgroundColor: '#72E5A2',
+    backgroundColor: FishingTheme.colors.darkGreen,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.forestGreen,
   },
   timeChipText: {
-    color: '#0B1220',
+    color: FishingTheme.colors.cream,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   baitChip: {
-    backgroundColor: '#1A2440',
+    backgroundColor: FishingTheme.colors.card,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#2A3A63',
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.border,
   },
   baitChipText: {
-    color: '#E8ECF1',
+    color: FishingTheme.colors.text.primary,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   lureCard: {
-    backgroundColor: '#1A2440',
+    backgroundColor: FishingTheme.colors.card,
     padding: 16,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#2A3A63',
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.border,
     marginBottom: 12,
   },
   lureHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 8,
   },
   lureName: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#E8ECF1',
+    fontWeight: '800',
+    color: FishingTheme.colors.darkGreen,
     flex: 1,
+    letterSpacing: 0.3,
   },
   lureRating: {
     alignItems: 'flex-end',
@@ -545,37 +665,75 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   effectivenessText: {
-    color: '#0B1220',
-    fontSize: 10,
-    fontWeight: '700',
+    color: FishingTheme.colors.cream,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   priceText: {
-    color: '#9BB0CC',
+    color: FishingTheme.colors.text.tertiary,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   lureType: {
     fontSize: 12,
-    color: '#72E5A2',
-    fontWeight: '600',
+    color: FishingTheme.colors.darkGreen,
+    fontWeight: '700',
     marginBottom: 6,
+    letterSpacing: 0.3,
   },
   lureDescription: {
     fontSize: 13,
-    color: '#AFC3E1',
+    color: FishingTheme.colors.text.secondary,
     lineHeight: 18,
     marginBottom: 12,
   },
+  tipsContainer: {
+    backgroundColor: FishingTheme.colors.background,
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: FishingTheme.colors.border,
+  },
+  tipsLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: FishingTheme.colors.text.tertiary,
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  tipsText: {
+    fontSize: 12,
+    color: FishingTheme.colors.text.primary,
+    lineHeight: 16,
+    fontStyle: 'italic',
+  },
+  commentsContainer: {
+    paddingLeft: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: FishingTheme.colors.darkGreen,
+    marginBottom: 12,
+  },
+  commentsText: {
+    fontSize: 12,
+    color: FishingTheme.colors.text.secondary,
+    lineHeight: 16,
+    fontStyle: 'italic',
+  },
   buyButton: {
-    backgroundColor: '#72E5A2',
+    backgroundColor: FishingTheme.colors.darkGreen,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
     alignSelf: 'flex-start',
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.forestGreen,
   },
   buyButtonText: {
-    color: '#0B1220',
-    fontSize: 12,
-    fontWeight: '700',
+    color: FishingTheme.colors.cream,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 });

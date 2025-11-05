@@ -383,9 +383,9 @@ export default function ProfileScreen() {
     return (
       <View style={[styles.container, styles.centered, { paddingTop: insets.top + 20 }]}>
         <View style={styles.logoBox}>
-          <Text style={styles.logoText}>FB</Text>
+          <Text style={styles.logoText}>AFF</Text>
         </View>
-        <Text style={styles.sectionTitle}>FISHING BUDDY</Text>
+        <Text style={styles.sectionTitle}>ANGLER FRIEND FINDER</Text>
         <Text style={styles.signInText}>
           Create your {fishingType} fishing profile and connect with other anglers instantly!
         </Text>

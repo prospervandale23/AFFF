@@ -1,15 +1,26 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FishingTheme } from '../constants/FishingTheme';
+import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '../lib/supabase';
 
+// Test with remote URL first - if this works, then it's a local file path issue
+const videoSource = { uri: './assets/videos/splash.mp4' };
+
+// Once the above works, try your local file:
+// const videoSource = require('./assets/videos/splash.mp4');
+
 export default function WelcomeScreen() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+
+  // Create video player with looping
+  const player = useVideoPlayer(videoSource, player => {
+    player.loop = true;
+    player.muted = true;
+    player.play();
+  });
 
   useEffect(() => {
     checkExistingUser();
@@ -49,143 +60,156 @@ export default function WelcomeScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={FishingTheme.colors.darkGreen} />
-      </View>
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator size="large" color="#72E5A2" />
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 40 }]}>
-      <View style={styles.header}>
-        <View style={styles.logoBox}>
-          <Text style={styles.logoText}>FB</Text>
-        </View>
-        <Text style={styles.title}>FISHING BUDDY</Text>
-        <Text style={styles.subtitle}>Connect with anglers near you</Text>
-      </View>
-
-      <View style={styles.selectionContainer}>
-        <Text style={styles.question}>WHAT TYPE OF FISHING DO YOU PREFER?</Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
+        {/* Video Background */}
+        <VideoView
+          style={styles.backgroundVideo}
+          player={player}
+          contentFit="cover"
+          nativeControls={false}
+          allowsFullscreen={false}
+        />
         
-        <Pressable 
-          style={styles.optionCard}
-          onPress={() => selectFishingType('freshwater')}
-        >
-          <View style={styles.optionHeader}>
-            <Text style={styles.optionTitle}>FRESHWATER</Text>
+        {/* Content on top of video */}
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <Text style={styles.logo}>🎣</Text>
+            <Text style={styles.title}>AFF</Text>
+            <Text style={styles.subtitle}>Connect with anglers near you</Text>
           </View>
-          <Text style={styles.optionDesc}>Lakes, rivers, ponds</Text>
-          <View style={styles.speciesContainer}>
-            <Text style={styles.speciesText}>Bass • Trout • Pike • Walleye</Text>
-          </View>
-        </Pressable>
 
-        <Pressable 
-          style={styles.optionCard}
-          onPress={() => selectFishingType('saltwater')}
-        >
-          <View style={styles.optionHeader}>
-            <Text style={styles.optionTitle}>SALTWATER</Text>
+          <View style={styles.selectionContainer}>
+            <Pressable 
+              style={styles.glassCard}
+              onPress={() => selectFishingType('freshwater')}
+            >
+              <Text style={styles.optionTitle}>Freshwater</Text>
+              <Text style={styles.optionDesc}>Lakes, rivers, ponds</Text>
+              <View style={styles.speciesRow}>
+                <Text style={styles.speciesText}>Bass • Trout • Pike • Walleye</Text>
+              </View>
+            </Pressable>
+
+            <Pressable 
+              style={styles.glassCard}
+              onPress={() => selectFishingType('saltwater')}
+            >
+              <Text style={styles.optionTitle}>Saltwater</Text>
+              <Text style={styles.optionDesc}>Ocean, bays, coastal</Text>
+              <View style={styles.speciesRow}>
+                <Text style={styles.speciesText}>Stripers • Tuna • Fluke • Blues</Text>
+              </View>
+            </Pressable>
           </View>
-          <Text style={styles.optionDesc}>Ocean, bays, coastal</Text>
-          <View style={styles.speciesContainer}>
-            <Text style={styles.speciesText}>Stripers • Tuna • Fluke • Blues</Text>
-          </View>
-        </Pressable>
+        </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: FishingTheme.colors.background,
+  },
+  backgroundVideo: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    right: 0,
+  },
+  content: {
+    flex: 1,
     justifyContent: 'center',
     padding: 20,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 50,
   },
-  logoBox: {
-    width: 80,
-    height: 80,
-    backgroundColor: FishingTheme.colors.darkGreen,
-    borderRadius: 16,
-    borderWidth: 3,
-    borderColor: FishingTheme.colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-    ...FishingTheme.shadows.lg,
-  },
-  logoText: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: FishingTheme.colors.cream,
-    letterSpacing: 2,
+  logo: {
+    fontSize: 60,
+    marginBottom: 16,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   title: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '800',
-    color: FishingTheme.colors.darkGreen,
+    color: '#FFFFFF',
     marginBottom: 8,
-    letterSpacing: 2,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 3 },
+    textShadowRadius: 10,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
-    color: FishingTheme.colors.text.tertiary,
+    fontSize: 18,
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
     fontWeight: '500',
   },
   selectionContainer: {
-    gap: 16,
+    gap: 20,
   },
-  question: {
-    fontSize: 14,
-    color: FishingTheme.colors.text.secondary,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 10,
-    letterSpacing: 0.5,
-  },
-  optionCard: {
-    backgroundColor: FishingTheme.colors.card,
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.border,
+  glassCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 24,
+    padding: 28,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
-    ...FishingTheme.shadows.md,
-  },
-  optionHeader: {
-    marginBottom: 8,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+    overflow: 'hidden',
   },
   optionTitle: {
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: '800',
-    color: FishingTheme.colors.darkGreen,
-    letterSpacing: 1,
+    color: '#FFFFFF',
+    marginBottom: 12,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+    letterSpacing: -0.3,
   },
   optionDesc: {
     fontSize: 16,
-    color: FishingTheme.colors.text.secondary,
-    marginBottom: 12,
-    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.95)',
+    marginBottom: 14,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+    letterSpacing: 0.2,
   },
-  speciesContainer: {
-    backgroundColor: FishingTheme.colors.background,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.border,
+  speciesRow: {
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   speciesText: {
-    fontSize: 14,
-    color: FishingTheme.colors.text.secondary,
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: '600',
-    letterSpacing: 0.3,
+    letterSpacing: 0.5,
   },
 });

@@ -1,3 +1,4 @@
+import { FishingTheme } from '@/constants/FishingTheme';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,7 +11,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FishingTheme } from '../../constants/FishingTheme';
 
 // Types
 type Buoy = { id: string; name: string; lat: number; lon: number };
@@ -33,11 +33,11 @@ type MoonPhase = {
   nextFull: string;
 };
 
-// Default buoys
+// Default buoys - these are NOAA tide stations with reliable data
 const DEFAULT_BUOYS: Buoy[] = [
-  { id: '44020', name: 'Block Island', lat: 40.97, lon: -71.12 },
-  { id: '44097', name: 'Buzzards Bay', lat: 41.39, lon: -71.03 },
-  { id: '44025', name: 'Long Island', lat: 40.25, lon: -73.16 },
+  { id: '8452660', name: 'Newport, RI', lat: 41.5, lon: -71.33 },
+  { id: '8461490', name: 'New London, CT', lat: 41.36, lon: -72.09 },
+  { id: '8510560', name: 'Montauk, NY', lat: 41.05, lon: -71.96 },
 ];
 
 export default function HomeScreen() {
@@ -48,6 +48,7 @@ export default function HomeScreen() {
   const [recentPres, setRecentPres] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [tempUnit, setTempUnit] = useState<'C' | 'F'>('F'); // Default to Fahrenheit
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const [windData, setWindData] = useState<WindData | null>(null);
@@ -68,6 +69,15 @@ export default function HomeScreen() {
     };
   }, [buoy.id]);
 
+  // Temperature conversion helpers
+  const celsiusToFahrenheit = (c: number): number => (c * 9/5) + 32;
+  
+  const formatTemp = (celsius: number | null | undefined): string => {
+    if (celsius == null) return '--';
+    const temp = tempUnit === 'F' ? celsiusToFahrenheit(celsius) : celsius;
+    return `${Math.round(temp)}°${tempUnit}`;
+  };
+
   async function loadAllData() {
     await Promise.all([loadBuoy(buoy.id), loadMarineConditions()]);
   }
@@ -77,25 +87,82 @@ export default function HomeScreen() {
       setLoading(true);
       setError('');
 
-      const mockData = {
+      // Fetch real data from NOAA
+      const baseUrl = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter';
+      
+      const products = [
+        { product: 'water_temperature', key: 'water_temp' },
+        { product: 'air_temperature', key: 'air_temp' },
+        { product: 'air_pressure', key: 'pressure' },
+        { product: 'wind', key: 'wind' },
+      ];
+
+      const result: any = {
         time: new Date().toISOString(),
-        water_temp_c: 18.5,
-        air_temp_c: 22.1,
-        pressure_hpa: 1013.2,
+        water_temp_c: null,
+        air_temp_c: null,
+        pressure_hpa: null,
       };
 
+      // Fetch each data product
+      for (const { product, key } of products) {
+        try {
+          const url = `${baseUrl}?date=latest&station=${stationId}&product=${product}&units=metric&time_zone=gmt&application=fishing_buddy&format=json`;
+          
+          const response = await fetch(url);
+          
+          if (response.ok) {
+            const data = await response.json();
+            
+            if (data.data && data.data.length > 0) {
+              const latest = data.data[data.data.length - 1];
+              
+              if (product === 'water_temperature' && latest.v) {
+                result.water_temp_c = parseFloat(latest.v);
+              } else if (product === 'air_temperature' && latest.v) {
+                result.air_temp_c = parseFloat(latest.v);
+              } else if (product === 'air_pressure' && latest.v) {
+                result.pressure_hpa = parseFloat(latest.v);
+              } else if (product === 'wind') {
+                if (latest.s && latest.d) {
+                  const speedMph = parseFloat(latest.s) * 2.237; // m/s to mph
+                  setWindData({
+                    speed: Math.round(speedMph),
+                    direction: parseFloat(latest.d),
+                    gust: Math.round(speedMph * 1.3),
+                  });
+                }
+              }
+            }
+          }
+        } catch (productError) {
+          console.warn(`Failed to fetch ${product}:`, productError);
+        }
+      }
+
       if (!mounted.current) return;
 
+      // Check if we got any real data
+      if (result.water_temp_c === null && result.air_temp_c === null && result.pressure_hpa === null) {
+        throw new Error('No data available from this station');
+      }
+
       setObs({
-        time: mockData.time,
-        wtmpC: mockData.water_temp_c,
-        atmpC: mockData.air_temp_c,
-        presHpa: mockData.pressure_hpa,
+        time: result.time,
+        wtmpC: result.water_temp_c,
+        atmpC: result.air_temp_c,
+        presHpa: result.pressure_hpa,
       });
+
+      // Add to pressure history for trend
+      if (result.pressure_hpa) {
+        setRecentPres(prev => [...prev.slice(-9), result.pressure_hpa].filter(Boolean));
+      }
+
     } catch (e: any) {
       if (!mounted.current) return;
-      console.warn('Buoy data error:', e);
-      setError('Unable to connect to weather buoy');
+      console.warn('Station data error:', e);
+      setError('Unable to connect to weather station - try another location');
       setObs(null);
     } finally {
       mounted.current && setLoading(false);
@@ -260,16 +327,24 @@ export default function HomeScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <View style={styles.headerContent}>
           <View style={styles.titleContainer}>
-            <Text style={styles.appTitle}>FISHING BUDDY</Text>
+            <Text style={styles.appTitle}>ANGLER FRIEND FINDER</Text>
             <Text style={styles.appSubtitle}>Marine Conditions</Text>
           </View>
-          <Pressable style={styles.buoyButton} onPress={() => setPickerOpen(true)}>
-            <View style={styles.buoyDot} />
-            <View>
-              <Text style={styles.buoyName}>{buoy.name}</Text>
-              <Text style={styles.buoyId}>Station {buoy.id}</Text>
-            </View>
-          </Pressable>
+          <View style={styles.headerButtons}>
+            <Pressable 
+              style={styles.tempToggle} 
+              onPress={() => setTempUnit(prev => prev === 'C' ? 'F' : 'C')}
+            >
+              <Text style={styles.tempToggleText}>°{tempUnit}</Text>
+            </Pressable>
+            <Pressable style={styles.buoyButton} onPress={() => setPickerOpen(true)}>
+              <View style={styles.buoyDot} />
+              <View>
+                <Text style={styles.buoyName}>{buoy.name}</Text>
+                <Text style={styles.buoyId}>Station {buoy.id}</Text>
+              </View>
+            </Pressable>
+          </View>
         </View>
       </View>
 
@@ -386,13 +461,7 @@ export default function HomeScreen() {
               <Text style={styles.unavailableText}>Data unavailable</Text>
             ) : (
               <>
-                <View style={styles.valueRow}>
-                  <Text style={styles.bigValue}>{airC != null ? airC.toFixed(1) : '—'}</Text>
-                  <Text style={styles.unit}>°C</Text>
-                </View>
-                <Text style={styles.tempConversion}>
-                  {airC != null ? toF(airC).toFixed(1) : '—'}°F
-                </Text>
+                <Text style={styles.bigValue}>{formatTemp(airC)}</Text>
               </>
             )}
           </DataCard>
@@ -405,13 +474,7 @@ export default function HomeScreen() {
               <Text style={styles.unavailableText}>Data unavailable</Text>
             ) : (
               <>
-                <View style={styles.valueRow}>
-                  <Text style={styles.bigValue}>{waterC != null ? waterC.toFixed(1) : '—'}</Text>
-                  <Text style={styles.unit}>°C</Text>
-                </View>
-                <Text style={styles.tempConversion}>
-                  {waterC != null ? toF(waterC).toFixed(1) : '—'}°F
-                </Text>
+                <Text style={styles.bigValue}>{formatTemp(waterC)}</Text>
               </>
             )}
           </DataCard>
@@ -527,10 +590,6 @@ function BuoyPickerModal({
   );
 }
 
-function toF(c: number) {
-  return (c * 9) / 5 + 32;
-}
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -551,6 +610,29 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     flex: 1,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  tempToggle: {
+    backgroundColor: FishingTheme.colors.darkGreen,
+    borderRadius: FishingTheme.borderRadius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.forestGreen,
+    minWidth: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...FishingTheme.shadows.sm,
+  },
+  tempToggleText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: FishingTheme.colors.cream,
+    letterSpacing: 0.5,
   },
   appTitle: {
     fontSize: FishingTheme.typography.sizes.display,
