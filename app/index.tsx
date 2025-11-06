@@ -2,7 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View, Platform } from 'react-native';
+import * as Linking from 'expo-linking';
 import { supabase } from '../lib/supabase';
 
 const videoSource = require('../assets/videos/splash.mp4');
@@ -10,6 +11,7 @@ const videoSource = require('../assets/videos/splash.mp4');
 export default function WelcomeScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(false);
 
   const player = useVideoPlayer(videoSource, player => {
     player.loop = true;
@@ -53,7 +55,28 @@ export default function WelcomeScreen() {
     }
   }
 
-  if (loading) {
+  async function signInWithApple() {
+    try {
+      setAuthLoading(true);
+      const redirectTo = Linking.createURL('/');
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo,
+          scopes: 'name email',
+        },
+      });
+      if (error) {
+        console.error('Apple sign-in error:', error);
+      }
+    } catch (err) {
+      console.error('Unexpected Apple sign-in error:', err);
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  if (loading || authLoading) {
     return (
       <View style={styles.root}>
         <ActivityIndicator size="large" color="#72E5A2" />
@@ -93,6 +116,15 @@ export default function WelcomeScreen() {
             >
               <Text style={styles.optionTitle}>Saltwater</Text>
             </Pressable>
+
+            {Platform.OS === 'ios' && (
+              <Pressable 
+                style={styles.glassCard}
+                onPress={signInWithApple}
+              >
+                <Text style={styles.optionTitle}>Continue with Apple</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       </SafeAreaView>

@@ -1,9 +1,12 @@
 import { supabase } from './supabase.js';
 
-// Type definitions matching your existing database schema
+// =====================================================
+// TYPE DEFINITIONS - STREAMLINED (NO UNUSED FIELDS)
+// =====================================================
+
 export interface MatchFilters {
   maxDistance?: number;
-  fishingType?: 'freshwater' | 'saltwater'; // ADD THIS
+  fishingType?: 'freshwater' | 'saltwater';
   experienceLevel?: 'Beginner' | 'Intermediate' | 'Advanced';
   tackleCategories?: string[];
   hasBoat?: boolean;
@@ -13,44 +16,33 @@ export interface MatchFilters {
   };
 }
 
-export interface CreateTripData {
-  title: string;
-  description: string;
-  location: string;
-  scheduledDate: string;
-  maxParticipants: number;
-  tackleNeeded: string[];
-  boatRequired: boolean;
-  fishingType?: 'freshwater' | 'saltwater'; // ADD THIS
-}
-
 export interface UserProfile {
   id: string;
   display_name: string;
-  bio: string;
-  home_port: string;
-  age: number;
-  location: string;
-  tackle_categories: string[];
-  rod: string;
-  reel: string;
-  line: string;
-  experience_level: 'Beginner' | 'Intermediate' | 'Advanced';
-  has_boat: boolean;
-  boat_type?: string; // ADD THIS
-  boat_length?: string; // ADD THIS
-  boat_name?: string; // ADD THIS
-  favorite_species: string[];
-  profile_photo_url: string;
-  preferred_fishing_times?: string[]; // ADD THIS
-  tackle_details?: { // ADD THIS
-    lures?: string;
-    bait?: string;
-    hooks?: string;
-    weights?: string;
-    other_gear?: string;
-  };
-  fishing_type?: 'freshwater' | 'saltwater'; // ADD THIS
+  bio?: string;
+  profile_photo_url?: string;
+  
+  // Fishing preferences  
+  fishing_style?: 'Spinning' | 'Fly' | 'Jigging' | 'Baitcasting' | 'Trolling' | 'Ice';
+  fishing_type?: 'freshwater' | 'saltwater';
+  
+  // Personal info
+  age?: number;
+  location?: string;
+  home_port?: string;
+  experience_level?: 'Beginner' | 'Intermediate' | 'Advanced';
+  favorite_species?: string[];
+  tackle_categories?: string[];
+  preferred_fishing_times?: string[];
+  
+  // Boat info
+  has_boat?: boolean;
+  boat_type?: string;
+  boat_length?: string;
+  boat_name?: string;
+  
+  // Meta
+  discoverable: boolean;
   created_at: string;
   updated_at: string;
   last_active: string;
@@ -91,8 +83,7 @@ export interface FishingReport {
   trip_duration_hours?: number;
   notes?: string;
   photo_urls: string[];
-  fishing_type?: 'freshwater' | 'saltwater'; // ADD THIS
-  water_body?: string; // ADD THIS (lake name, ocean area, etc.)
+  fishing_type?: 'freshwater' | 'saltwater';
   created_at: string;
   allow_research_use: boolean;
 }
@@ -101,13 +92,14 @@ export interface PrivacySettings {
   id: string;
   allow_photos_from: 'everyone' | 'matches' | 'none';
   allow_location_from: 'everyone' | 'matches' | 'none';
-  show_last_active: boolean;
   discoverable: boolean;
   created_at: string;
   updated_at: string;
 }
 
-// API Functions
+// =====================================================
+// API FUNCTIONS
+// =====================================================
 
 /**
  * Get potential fishing buddies based on filters
@@ -117,40 +109,39 @@ export async function getPotentialMatches(userId: string, filters?: MatchFilters
     let query = supabase
       .from('profiles')
       .select('*')
-      .neq('id', userId) // Don't include current user
-      .eq('discoverable', true); // Only show discoverable users
+      .neq('id', userId)
+      .eq('discoverable', true);
 
-    // IMPORTANT: Add fishing type filter
+    // Filter by fishing_type (freshwater/saltwater)
     if (filters?.fishingType) {
       query = query.eq('fishing_type', filters.fishingType);
     }
 
-    // Apply other filters if provided
+    // Filter by experience level
     if (filters?.experienceLevel) {
       query = query.eq('experience_level', filters.experienceLevel);
     }
 
+    // Filter by boat ownership
     if (filters?.hasBoat !== undefined) {
       query = query.eq('has_boat', filters.hasBoat);
     }
 
+    // Filter by tackle categories (array overlap)
     if (filters?.tackleCategories && filters.tackleCategories.length > 0) {
       query = query.overlaps('tackle_categories', filters.tackleCategories);
     }
 
+    // Filter by age range
     if (filters?.ageRange) {
       query = query
         .gte('age', filters.ageRange.min)
         .lte('age', filters.ageRange.max);
     }
 
-    // Add distance filtering if maxDistance is provided
-    // Note: This requires PostGIS extension in Supabase for proper implementation
-    // For now, we'll fetch all and filter client-side if needed
-
     const { data, error } = await query
-      .order('last_active', { ascending: false }) // Most recently active first
-      .limit(50); // Increased limit for better matching
+      .order('last_active', { ascending: false })
+      .limit(50);
 
     if (error) {
       console.error('Error fetching potential matches:', error);
@@ -165,7 +156,7 @@ export async function getPotentialMatches(userId: string, filters?: MatchFilters
 }
 
 /**
- * Get user profile with fishing type
+ * Get user profile by ID
  */
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   try {
@@ -188,7 +179,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
 }
 
 /**
- * Update user profile (including fishing type)
+ * Update user profile
  */
 export async function updateUserProfile(userId: string, updates: Partial<UserProfile>): Promise<UserProfile> {
   try {
@@ -344,7 +335,7 @@ export async function getConversationMessages(conversationId: string): Promise<M
 }
 
 /**
- * Create a fishing report with fishing type
+ * Create a fishing report
  */
 export async function createFishingReport(reportData: Omit<FishingReport, 'id' | 'created_at'>): Promise<FishingReport> {
   try {
@@ -367,7 +358,7 @@ export async function createFishingReport(reportData: Omit<FishingReport, 'id' |
 }
 
 /**
- * Get nearby fishing reports (filtered by fishing type)
+ * Get nearby fishing reports
  */
 export async function getNearbyFishingReports(
   latitude: number, 
@@ -380,7 +371,6 @@ export async function getNearbyFishingReports(
       .from('fishing_reports')
       .select('*');
 
-    // Filter by fishing type if provided
     if (fishingType) {
       query = query.eq('fishing_type', fishingType);
     }
@@ -394,7 +384,7 @@ export async function getNearbyFishingReports(
       throw error;
     }
 
-    // Simple distance filtering (replace with PostGIS in production)
+    // Simple distance filtering
     const filtered = data?.filter(report => {
       const distance = calculateDistance(latitude, longitude, report.latitude, report.longitude);
       return distance <= radiusKm;
@@ -474,72 +464,15 @@ export async function updateLastActive(userId: string): Promise<void> {
   }
 }
 
-/**
- * Create or join a fishing trip
- */
-export async function createFishingTrip(tripData: CreateTripData & { organizerId: string }): Promise<any> {
-  try {
-    const { data, error } = await supabase
-      .from('fishing_trips')
-      .insert({
-        organizer_id: tripData.organizerId,
-        title: tripData.title,
-        description: tripData.description,
-        location: tripData.location,
-        scheduled_date: tripData.scheduledDate,
-        max_participants: tripData.maxParticipants,
-        tackle_needed: tripData.tackleNeeded,
-        boat_required: tripData.boatRequired,
-        fishing_type: tripData.fishingType
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error creating fishing trip:', error);
-      throw error;
-    }
-
-    return data;
-  } catch (error) {
-    console.error('createFishingTrip error:', error);
-    throw error;
-  }
-}
+// =====================================================
+// UTILITY FUNCTIONS
+// =====================================================
 
 /**
- * Get upcoming fishing trips
+ * Calculate distance between two coordinates (Haversine formula)
  */
-export async function getUpcomingTrips(fishingType?: 'freshwater' | 'saltwater'): Promise<any[]> {
-  try {
-    let query = supabase
-      .from('fishing_trips')
-      .select('*')
-      .gte('scheduled_date', new Date().toISOString());
-
-    if (fishingType) {
-      query = query.eq('fishing_type', fishingType);
-    }
-
-    const { data, error } = await query
-      .order('scheduled_date', { ascending: true })
-      .limit(20);
-
-    if (error) {
-      console.error('Error fetching trips:', error);
-      throw error;
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error('getUpcomingTrips error:', error);
-    throw error;
-  }
-}
-
-// Utility function for distance calculation (replace with PostGIS in production)
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Radius of the Earth in km
+  const R = 6371; // Earth's radius in km
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = 
@@ -547,5 +480,5 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
     Math.sin(dLon/2) * Math.sin(dLon/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c; // Distance in km
+  return R * c;
 }

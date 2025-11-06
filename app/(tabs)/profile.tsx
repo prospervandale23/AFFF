@@ -1,8 +1,9 @@
 import { useFishing } from '@/contexts/FishingContext';
 import React, { useEffect, useState } from 'react';
 import {
-  Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View
+  Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Platform
 } from 'react-native';
+import * as Linking from 'expo-linking';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FishingTheme } from '../../constants/FishingTheme';
 import { supabase } from '../../lib/supabase';
@@ -308,6 +309,30 @@ export default function ProfileScreen() {
     }
   }
 
+  async function signInWithApple() {
+    try {
+      setAuthError(null);
+      setLoading(true);
+      const redirectTo = Linking.createURL('/');
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo,
+          scopes: 'name email',
+        },
+      });
+      if (error) {
+        console.error('Apple sign-in error:', error);
+        Alert.alert('Error', error.message);
+      }
+    } catch (error) {
+      console.error('Unexpected Apple sign-in error:', error);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function signInAnonymously() {
     console.log('🔐 Anonymous sign in process started');
     
@@ -396,6 +421,12 @@ export default function ProfileScreen() {
           </Text>
         )}
         
+        {Platform.OS === 'ios' && (
+          <Pressable style={[styles.signInButton, { marginBottom: 12 }]} onPress={signInWithApple}>
+            <Text style={styles.signInButtonText}>CONTINUE WITH APPLE</Text>
+          </Pressable>
+        )}
+
         <Pressable style={styles.signInButton} onPress={signInAnonymously}>
           <Text style={styles.signInButtonText}>GET STARTED</Text>
         </Pressable>
