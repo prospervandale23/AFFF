@@ -123,7 +123,7 @@ const freshwaterSpecies: SpeciesInfo[] = [
 const saltwaterSpecies: SpeciesInfo[] = [
   {
     id: 'striped-bass',
-    name: 'Striped Bass',
+    name: 'Striped Bass (Striper)',
     slotSize: 'Slot: 28"-31"',
     description: 'Premier game fish of the Atlantic coast. Strong fighters that provide excellent table fare.',
     habitat: 'Coastal waters, estuaries, rocky shores, and structure',

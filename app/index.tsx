@@ -2,20 +2,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '../lib/supabase';
 
-// Test with remote URL first - if this works, then it's a local file path issue
-const videoSource = { uri: './assets/videos/splash.mp4' };
-
-// Once the above works, try your local file:
-// const videoSource = require('./assets/videos/splash.mp4');
+const videoSource = require('../assets/videos/splash.mp4');
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
 
-  // Create video player with looping
   const player = useVideoPlayer(videoSource, player => {
     player.loop = true;
     player.muted = true;
@@ -60,28 +55,26 @@ export default function WelcomeScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.root}>
         <ActivityIndicator size="large" color="#72E5A2" />
-      </SafeAreaView>
+        <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.container}>
-        {/* Video Background */}
-        <VideoView
-          style={styles.backgroundVideo}
-          player={player}
-          contentFit="cover"
-          nativeControls={false}
-          allowsFullscreen={false}
-        />
-        
-        {/* Content on top of video */}
+    <View style={styles.root}>
+      <VideoView
+        style={styles.backgroundVideo}
+        player={player}
+        contentFit="cover"
+        nativeControls={false}
+        allowsFullscreen={false}
+      />
+
+      <SafeAreaView style={styles.container}>
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.logo}>🎣</Text>
             <Text style={styles.title}>AFF</Text>
             <Text style={styles.subtitle}>Connect with anglers near you</Text>
           </View>
@@ -92,10 +85,6 @@ export default function WelcomeScreen() {
               onPress={() => selectFishingType('freshwater')}
             >
               <Text style={styles.optionTitle}>Freshwater</Text>
-              <Text style={styles.optionDesc}>Lakes, rivers, ponds</Text>
-              <View style={styles.speciesRow}>
-                <Text style={styles.speciesText}>Bass • Trout • Pike • Walleye</Text>
-              </View>
             </Pressable>
 
             <Pressable 
@@ -103,28 +92,26 @@ export default function WelcomeScreen() {
               onPress={() => selectFishingType('saltwater')}
             >
               <Text style={styles.optionTitle}>Saltwater</Text>
-              <Text style={styles.optionDesc}>Ocean, bays, coastal</Text>
-              <View style={styles.speciesRow}>
-                <Text style={styles.speciesText}>Stripers • Tuna • Fluke • Blues</Text>
-              </View>
             </Pressable>
           </View>
         </View>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+
+      <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
   container: {
     flex: 1,
   },
   backgroundVideo: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    right: 0,
+    ...StyleSheet.absoluteFillObject,
   },
   content: {
     flex: 1,
@@ -134,13 +121,6 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: 50,
-  },
-  logo: {
-    fontSize: 60,
-    marginBottom: 16,
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
   },
   title: {
     fontSize: 36,
@@ -165,12 +145,11 @@ const styles = StyleSheet.create({
   },
   glassCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 24,
-    padding: 28,
+    borderRadius: 10,
+    padding: 10,
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
-    marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
