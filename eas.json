@@ -19,7 +19,10 @@
         "simulator": false,
         "resourceClass": "m-medium"
       },
-      "channel": "development-device"
+      "channel": "development-device",
+      "env": {
+        "EXPO_NO_CAPABILITY_SYNC": "1"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -39,7 +42,10 @@
       "android": {
         "buildType": "app-bundle"
       },
-      "channel": "production"
+      "channel": "production",
+      "env": {
+        "EXPO_NO_CAPABILITY_SYNC": "1"
+      }
     }
   },
   "submit": {

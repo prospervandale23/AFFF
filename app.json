@@ -12,6 +12,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.pvandale766.fishingbuddy",
       "buildNumber": "1",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Fishing Buddy uses your location to find nearby fishing buddies and show local fishing conditions.",
         "NSLocationAlwaysUsageDescription": "Fishing Buddy uses your location to notify you when fishing buddies are nearby.",

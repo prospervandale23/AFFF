@@ -1,4 +1,5 @@
 import { FishingTheme } from '@/constants/FishingTheme';
+import { useFishing } from '@/contexts/FishingContext';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -33,7 +34,7 @@ type MoonPhase = {
   nextFull: string;
 };
 
-// Default buoys - these are NOAA tide stations with reliable data
+// Default buoys - NOAA tide stations
 const DEFAULT_BUOYS: Buoy[] = [
   { id: '8452660', name: 'Newport, RI', lat: 41.5, lon: -71.33 },
   { id: '8461490', name: 'New London, CT', lat: 41.36, lon: -72.09 },
@@ -42,13 +43,14 @@ const DEFAULT_BUOYS: Buoy[] = [
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const { fishingType, setFishingType } = useFishing();
   
   const [buoy, setBuoy] = useState<Buoy>(DEFAULT_BUOYS[0]);
   const [obs, setObs] = useState<Obs | null>(null);
   const [recentPres, setRecentPres] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
-  const [tempUnit, setTempUnit] = useState<'C' | 'F'>('F'); // Default to Fahrenheit
+  const [tempUnit, setTempUnit] = useState<'C' | 'F'>('F');
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const [windData, setWindData] = useState<WindData | null>(null);
@@ -69,7 +71,7 @@ export default function HomeScreen() {
     };
   }, [buoy.id]);
 
-  // Temperature conversion helpers
+  // Temperature conversion
   const celsiusToFahrenheit = (c: number): number => (c * 9/5) + 32;
   
   const formatTemp = (celsius: number | null | undefined): string => {
@@ -87,7 +89,6 @@ export default function HomeScreen() {
       setLoading(true);
       setError('');
 
-      // Fetch real data from NOAA
       const baseUrl = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter';
       
       const products = [
@@ -104,7 +105,6 @@ export default function HomeScreen() {
         pressure_hpa: null,
       };
 
-      // Fetch each data product
       for (const { product, key } of products) {
         try {
           const url = `${baseUrl}?date=latest&station=${stationId}&product=${product}&units=metric&time_zone=gmt&application=fishing_buddy&format=json`;
@@ -125,7 +125,7 @@ export default function HomeScreen() {
                 result.pressure_hpa = parseFloat(latest.v);
               } else if (product === 'wind') {
                 if (latest.s && latest.d) {
-                  const speedMph = parseFloat(latest.s) * 2.237; // m/s to mph
+                  const speedMph = parseFloat(latest.s) * 2.237;
                   setWindData({
                     speed: Math.round(speedMph),
                     direction: parseFloat(latest.d),
@@ -142,7 +142,6 @@ export default function HomeScreen() {
 
       if (!mounted.current) return;
 
-      // Check if we got any real data
       if (result.water_temp_c === null && result.air_temp_c === null && result.pressure_hpa === null) {
         throw new Error('No data available from this station');
       }
@@ -154,7 +153,6 @@ export default function HomeScreen() {
         presHpa: result.pressure_hpa,
       });
 
-      // Add to pressure history for trend
       if (result.pressure_hpa) {
         setRecentPres(prev => [...prev.slice(-9), result.pressure_hpa].filter(Boolean));
       }
@@ -321,13 +319,18 @@ export default function HomeScreen() {
   const pres = obs?.presHpa ?? null;
   const conditions = getFishingConditions();
 
+  // Toggle fishing type
+  async function toggleFishingType() {
+    const newType = fishingType === 'freshwater' ? 'saltwater' : 'freshwater';
+    await setFishingType(newType);
+  }
+
   return (
     <View style={styles.screen}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <View style={styles.headerContent}>
           <View style={styles.titleContainer}>
-            <Text style={styles.appTitle}>ANGLER FRIEND FINDER</Text>
             <Text style={styles.appSubtitle}>Marine Conditions</Text>
           </View>
           <View style={styles.headerButtons}>
@@ -336,6 +339,14 @@ export default function HomeScreen() {
               onPress={() => setTempUnit(prev => prev === 'C' ? 'F' : 'C')}
             >
               <Text style={styles.tempToggleText}>°{tempUnit}</Text>
+            </Pressable>
+            <Pressable 
+              style={styles.fishingTypeToggle} 
+              onPress={toggleFishingType}
+            >
+              <Text style={styles.fishingTypeText}>
+                {fishingType === 'freshwater' ? '🏞️ FRESH' : '🌊 SALT'}
+              </Text>
             </Pressable>
             <Pressable style={styles.buoyButton} onPress={() => setPickerOpen(true)}>
               <View style={styles.buoyDot} />
@@ -354,7 +365,9 @@ export default function HomeScreen() {
       >
         {/* Forecast Card */}
         <View style={styles.forecastSection}>
-          <Text style={styles.sectionLabel}>TODAY'S FORECAST</Text>
+          <Text style={styles.sectionLabel}>
+            TODAY'S {fishingType === 'freshwater' ? 'FRESHWATER' : 'SALTWATER'} FORECAST
+          </Text>
           <View style={[styles.forecastCard, { borderLeftColor: conditions.color }]}>
             <View style={styles.forecastHeader}>
               <Text style={[styles.forecastScore, { color: conditions.color }]}>
@@ -634,6 +647,21 @@ const styles = StyleSheet.create({
     color: FishingTheme.colors.cream,
     letterSpacing: 0.5,
   },
+  fishingTypeToggle: {
+    backgroundColor: FishingTheme.colors.darkGreen,
+    borderRadius: FishingTheme.borderRadius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.forestGreen,
+    ...FishingTheme.shadows.sm,
+  },
+  fishingTypeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: FishingTheme.colors.cream,
+    letterSpacing: 0.5,
+  },
   appTitle: {
     fontSize: FishingTheme.typography.sizes.display,
     fontWeight: FishingTheme.typography.weights.extrabold,
@@ -641,7 +669,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   appSubtitle: {
-    fontSize: FishingTheme.typography.sizes.sm,
+    fontSize: FishingTheme.typography.sizes.xs,
     color: FishingTheme.colors.text.tertiary,
     marginTop: 2,
     letterSpacing: 0.5,
@@ -852,11 +880,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: FishingTheme.colors.text.secondary,
     marginBottom: 4,
-  },
-  tempConversion: {
-    fontSize: 14,
-    color: FishingTheme.colors.text.tertiary,
-    marginTop: 4,
   },
   unavailableText: {
     fontSize: 13,
