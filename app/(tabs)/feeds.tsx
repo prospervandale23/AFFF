@@ -15,30 +15,10 @@ import {
   View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CloseButton } from '../../components/Closebutton';
 import { FishingTheme } from '../../constants/FishingTheme';
+import { FishingBuddy, allMockBuddies } from '../../lib/mockBuddies';
 import { supabase } from '../../lib/supabase';
-
-interface FishingBuddy {
-  id: string;
-  display_name: string;
-  age: number;
-  location: string;
-  distance: number; // Distance in miles
-  tackle_categories: string[];
-  experience_level: 'Beginner' | 'Intermediate' | 'Advanced';
-  bio: string;
-  profile_photo_url?: string;
-  last_active: string;
-  has_boat: boolean;
-  boat_type?: string;
-  boat_name?: string;
-  boat_length?: string;
-  favorite_species: string[];
-  home_port: string;
-  fishing_type: 'freshwater' | 'saltwater';
-  instagram?: string;
-  preferred_times?: string[];
-}
 
 interface Filters {
   maxDistance: number;
@@ -51,248 +31,6 @@ interface Filters {
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH * 0.9;
 const CARD_HEIGHT = SCREEN_HEIGHT * 0.7;
-
-// Mock profile photos (using placeholder URLs)
-const mockPhotos = {
-  saltwater: [
-    'https://images.unsplash.com/photo-1529230117010-b6c436154f25?w=400&h=500&fit=crop',
-    'https://images.unsplash.com/photo-1556912172-45b7abe8b7e1?w=400&h=500&fit=crop',
-    'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=400&h=500&fit=crop',
-    'https://images.unsplash.com/photo-1535083783855-76ae62b2914e?w=400&h=500&fit=crop',
-    'https://images.unsplash.com/photo-1516690553959-71a414d6b9b6?w=400&h=500&fit=crop',
-  ],
-  freshwater: [
-    'https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=400&h=500&fit=crop',
-    'https://images.unsplash.com/photo-1504309250229-4f08315f7b5e?w=400&h=500&fit=crop',
-    'https://images.unsplash.com/photo-1528837516156-0a7225a43641?w=400&h=500&fit=crop',
-    'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=400&h=500&fit=crop',
-    'https://images.unsplash.com/photo-1500463959177-e0869687df26?w=400&h=500&fit=crop',
-  ]
-};
-
-// Mock data for demo
-const mockSaltwaterBuddies: FishingBuddy[] = [
-  {
-    id: 'sw1',
-    display_name: 'Captain Mike',
-    age: 42,
-    location: 'Point Judith, RI',
-    distance: 8,
-    tackle_categories: ['Heavy Spinning', 'Jigging', 'Trolling'],
-    experience_level: 'Advanced',
-    bio: "30+ years fishing the Northeast waters. I run charters out of Point Judith targeting stripers, blues, and tuna. Always looking for serious anglers to share fuel costs on off days.",
-    profile_photo_url: mockPhotos.saltwater[0],
-    last_active: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    has_boat: true,
-    boat_type: 'Center Console',
-    boat_name: 'Reel Deal',
-    boat_length: '31-35ft',
-    favorite_species: ['Striped Bass', 'Tuna', 'Bluefish'],
-    home_port: 'Point Judith Marina',
-    fishing_type: 'saltwater',
-    instagram: '@captmike_ri',
-    preferred_times: ['Dawn', 'Dusk']
-  },
-  {
-    id: 'sw2',
-    display_name: 'Sarah T',
-    age: 28,
-    location: 'Newport, RI',
-    distance: 12,
-    tackle_categories: ['Light Spinning', 'Surf Casting'],
-    experience_level: 'Intermediate',
-    bio: "Marine biologist turned fishing enthusiast. Love early morning surf casting for stripers and sharing knowledge about sustainable fishing practices. Let's protect what we love!",
-    profile_photo_url: mockPhotos.saltwater[1],
-    last_active: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    has_boat: false,
-    favorite_species: ['Striped Bass', 'Fluke', 'Sea Bass'],
-    home_port: 'Castle Hill',
-    fishing_type: 'saltwater',
-    instagram: '@oceanbiosarah',
-    preferred_times: ['Early Morning', 'Morning']
-  },
-  {
-    id: 'sw3',
-    display_name: 'Tony "Tuna"',
-    age: 55,
-    location: 'Galilee, RI',
-    distance: 10,
-    tackle_categories: ['Heavy Spinning', 'Trolling', 'Jigging'],
-    experience_level: 'Advanced',
-    bio: "Tournament angler, 3x Block Island tuna champion. Have a 35' Contender always rigged and ready. Split costs, catch giants, tell stories. Simple as that.",
-    profile_photo_url: mockPhotos.saltwater[2],
-    last_active: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-    has_boat: true,
-    boat_type: 'Sportfisher',
-    boat_name: 'Tuna Terror',
-    boat_length: '36-40ft',
-    favorite_species: ['Tuna', 'Mahi', 'Striped Bass'],
-    home_port: 'Port of Galilee',
-    fishing_type: 'saltwater',
-    preferred_times: ['Dawn', 'Morning', 'Afternoon']
-  },
-  {
-    id: 'sw4',
-    display_name: 'Jake Sullivan',
-    age: 34,
-    location: 'Wickford, RI',
-    distance: 18,
-    tackle_categories: ['Light Spinning', 'Jigging'],
-    experience_level: 'Beginner',
-    bio: "New to saltwater fishing but eager to learn! Just moved to RI from Colorado. Have all the gear, need the knowledge. Happy to help with boat costs or shore fishing.",
-    profile_photo_url: mockPhotos.saltwater[3],
-    last_active: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-    has_boat: false,
-    favorite_species: ['Striped Bass', 'Fluke'],
-    home_port: 'Wickford Harbor',
-    fishing_type: 'saltwater',
-    preferred_times: ['Weekends Only']
-  },
-  {
-    id: 'sw5',
-    display_name: 'Captain Amanda',
-    age: 38,
-    location: 'Narragansett, RI',
-    distance: 5,
-    tackle_categories: ['Light Spinning', 'Heavy Spinning', 'Surf Casting'],
-    experience_level: 'Advanced',
-    bio: "USCG licensed captain. Specialize in light tackle and fly fishing for albies and bonito. My 24' bay boat is perfect for skinny water. Dawn patrol is my favorite!",
-    profile_photo_url: mockPhotos.saltwater[4],
-    last_active: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    has_boat: true,
-    boat_type: 'Bay Boat',
-    boat_name: 'Salty Sisters',
-    boat_length: '20-25ft',
-    favorite_species: ['False Albacore', 'Bonito', 'Striped Bass'],
-    home_port: 'Ram Point Marina',
-    fishing_type: 'saltwater',
-    instagram: '@saltysistercharters',
-    preferred_times: ['Dawn', 'Early Morning']
-  },
-  {
-    id: 'sw6',
-    display_name: 'Dave "Fluke" Finder',
-    age: 48,
-    location: 'Watch Hill, RI',
-    distance: 25,
-    tackle_categories: ['Light Spinning', 'Jigging'],
-    experience_level: 'Intermediate',
-    bio: "Fluke fanatic! Know all the best drifts from Watch Hill to Block Island. Looking for buddies who appreciate the art of bucktailing. 22' Parker always ready to go.",
-    profile_photo_url: mockPhotos.saltwater[0],
-    last_active: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-    has_boat: true,
-    boat_type: 'Center Console',
-    boat_name: 'Fluke Finder',
-    boat_length: '20-25ft',
-    favorite_species: ['Fluke', 'Sea Bass', 'Tautog'],
-    home_port: 'Watch Hill Marina',
-    fishing_type: 'saltwater',
-    preferred_times: ['Morning', 'Afternoon']
-  }
-];
-
-const mockFreshwaterBuddies: FishingBuddy[] = [
-  {
-    id: 'fw1',
-    display_name: 'Big Bass Bill',
-    age: 45,
-    location: 'Lake Winnipesaukee, NH',
-    distance: 75,
-    tackle_categories: ['Baitcasting', 'Medium Spinning'],
-    experience_level: 'Advanced',
-    bio: "Tournament bass angler with 20+ years experience. Know every honey hole on Winnipesaukee. Running a Ranger 520 with all the electronics. Let's chase some hawgs!",
-    profile_photo_url: mockPhotos.freshwater[0],
-    last_active: new Date(Date.now() - 1000 * 60 * 20).toISOString(),
-    has_boat: true,
-    boat_type: 'Bass Boat',
-    boat_name: 'Bass Master',
-    boat_length: '20-25ft',
-    favorite_species: ['Bass', 'Pike', 'Perch'],
-    home_port: 'Alton Bay',
-    fishing_type: 'freshwater',
-    instagram: '@bigbassbill_nh',
-    preferred_times: ['Dawn', 'Dusk']
-  },
-  {
-    id: 'fw2',
-    display_name: 'Emma Fisher',
-    age: 26,
-    location: 'Lake George, NY',
-    distance: 120,
-    tackle_categories: ['Fly', 'Light Spinning'],
-    experience_level: 'Intermediate',
-    bio: "Fly fishing enthusiast and outdoor photographer. Love catching native brook trout in the Adirondacks. Always looking for scenic spots and fishing buddies who respect nature.",
-    profile_photo_url: mockPhotos.freshwater[1],
-    last_active: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-    has_boat: false,
-    favorite_species: ['Trout', 'Bass', 'Pike'],
-    home_port: 'Lake George Village',
-    fishing_type: 'freshwater',
-    instagram: '@flyfishemma',
-    preferred_times: ['Early Morning', 'Morning']
-  },
-  {
-    id: 'fw3',
-    display_name: 'Old Timer Tom',
-    age: 67,
-    location: 'Lake Champlain, VT',
-    distance: 150,
-    tackle_categories: ['Ice Fishing', 'Light Spinning', 'Medium Spinning'],
-    experience_level: 'Advanced',
-    bio: "Retired and fishing every day. Know Champlain like the back of my hand. Got a reliable Lund with a 4-stroke. Coffee's always hot, stories are free, let's catch some walleye!",
-    profile_photo_url: mockPhotos.freshwater[2],
-    last_active: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-    has_boat: true,
-    boat_type: 'Jon Boat',
-    boat_name: 'Time Killer',
-    boat_length: 'Under 20ft',
-    favorite_species: ['Walleye', 'Pike', 'Perch', 'Bass'],
-    home_port: 'Burlington Harbor',
-    fishing_type: 'freshwater',
-    preferred_times: ['Early Morning', 'Morning', 'Afternoon']
-  },
-  {
-    id: 'fw4',
-    display_name: 'College Chris',
-    age: 22,
-    location: 'Quabbin Reservoir, MA',
-    distance: 45,
-    tackle_categories: ['Light Spinning', 'Fly'],
-    experience_level: 'Beginner',
-    bio: "URI student, fishing team member. Learning to fish New England waters. Have a kayak and basic gear. Down for early morning sessions before class!",
-    profile_photo_url: mockPhotos.freshwater[3],
-    last_active: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
-    has_boat: false,
-    favorite_species: ['Bass', 'Trout'],
-    home_port: 'Gate 8 Launch',
-    fishing_type: 'freshwater',
-    instagram: '@chrisfishesuri',
-    preferred_times: ['Early Morning', 'Weekends Only']
-  },
-  {
-    id: 'fw5',
-    display_name: 'Pike Mike',
-    age: 39,
-    location: 'Connecticut River, CT',
-    distance: 65,
-    tackle_categories: ['Medium Spinning', 'Heavy Spinning', 'Baitcasting'],
-    experience_level: 'Intermediate',
-    bio: "Northern pike specialist. If it has teeth, I'm hunting it. Got a 20' aluminum perfect for river fishing. Always catch and release for the big ones. Tight lines!",
-    profile_photo_url: mockPhotos.freshwater[4],
-    last_active: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
-    has_boat: true,
-    boat_type: 'Jon Boat',
-    boat_name: 'Pike Finder',
-    boat_length: 'Under 20ft',
-    favorite_species: ['Pike', 'Bass', 'Catfish'],
-    home_port: 'Haddam Meadows',
-    fishing_type: 'freshwater',
-    preferred_times: ['Dawn', 'Dusk', 'Night']
-  }
-];
-
-// Combine all mock buddies
-const allMockBuddies = [...mockSaltwaterBuddies, ...mockFreshwaterBuddies];
 
 export default function FeedsScreen() {
   const insets = useSafeAreaInsets();
@@ -470,25 +208,12 @@ export default function FeedsScreen() {
   const currentBuddy = buddies[currentIndex];
 
   // ====== MAIN RENDER ======
-  // The main container uses flex:1 to fill the entire screen
-  // Safe areas are handled at the top and bottom
-  // The middle content area flexes to fill available space
   return (
     <View style={styles.container}>
-      {/* 
-        SAFE AREA TOP
-        - Protects content from status bar
-        - Height dynamically set based on device (notch, dynamic island, etc)
-        - Background matches app theme for seamless look
-      */}
+      {/* SAFE AREA TOP */}
       <View style={[styles.safeAreaTop, { height: insets.top }]} />
       
-      {/* 
-        HEADER SECTION
-        - Fixed height header that doesn't scroll
-        - Contains title, subtitle, and filter button
-        - Filter button shows active indicator (green dot) when filters applied
-      */}
+      {/* HEADER SECTION */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.titleSection}>
@@ -513,12 +238,7 @@ export default function FeedsScreen() {
         </View>
       </View>
 
-      {/* 
-        MAIN CONTENT AREA
-        - Uses flex:1 to fill all available space between header and nav
-        - Contains the swipeable card stack
-        - Card is sized to fit within this container
-      */}
+      {/* MAIN CONTENT AREA */}
       <View style={styles.mainContent}>
         {/* Card Stack Container - centers the card in available space */}
         <View style={styles.cardStack}>
@@ -533,16 +253,11 @@ export default function FeedsScreen() {
         </View>
       </View>
 
-      {/* 
-        NAVIGATION SECTION
-        - Fixed at bottom, doesn't scroll
-        - Contains Previous, Message, and Next buttons
-        - Buttons disable at list boundaries
-      */}
+      {/* NAVIGATION SECTION - Simplified with just PREV and NEXT */}
       <View style={styles.navigationSection}>
         <View style={styles.navigationButtons}>
           <Pressable 
-            style={[styles.navButton, currentIndex === 0 && styles.navButtonDisabled]} 
+            style={[styles.navButton, styles.navButtonLarge, currentIndex === 0 && styles.navButtonDisabled]} 
             onPress={goToPrevious} 
             disabled={currentIndex === 0}
           >
@@ -551,12 +266,8 @@ export default function FeedsScreen() {
             </Text>
           </Pressable>
           
-          <Pressable style={styles.messageButton} onPress={() => openMessageModal(currentBuddy)}>
-            <Text style={styles.messageButtonText}>MESSAGE</Text>
-          </Pressable>
-          
           <Pressable 
-            style={[styles.navButton, currentIndex === buddies.length - 1 && styles.navButtonDisabled]} 
+            style={[styles.navButton, styles.navButtonLarge, currentIndex === buddies.length - 1 && styles.navButtonDisabled]} 
             onPress={goToNext} 
             disabled={currentIndex === buddies.length - 1}
           >
@@ -567,11 +278,7 @@ export default function FeedsScreen() {
         </View>
       </View>
 
-      {/* 
-        SAFE AREA BOTTOM
-        - Protects navigation from home indicator
-        - Only applies on devices with home indicators (iPhone X+)
-      */}
+      {/* SAFE AREA BOTTOM */}
       <View style={[styles.safeAreaBottom, { height: insets.bottom }]} />
 
       {/* MODALS - Render outside main layout */}
@@ -680,11 +387,7 @@ function BuddyCard({ buddy, onMessage }: { buddy: FishingBuddy; onMessage: () =>
 
   return (
     <View style={styles.buddyCard}>
-      {/* 
-        PHOTO SECTION (40% of card height)
-        - Shows profile photo or placeholder
-        - Overlay contains name, location, and status
-      */}
+      {/* PHOTO SECTION (40% of card height) */}
       <View style={styles.photoContainer}>
         {buddy.profile_photo_url ? (
           <Image 
@@ -715,17 +418,13 @@ function BuddyCard({ buddy, onMessage }: { buddy: FishingBuddy; onMessage: () =>
         </View>
       </View>
       
-      {/* 
-        DETAILS SECTION (60% of card height)
-        - Fixed height container with internal scrolling
-        - Contains bio, boat info, tackle, species, etc.
-      */}
+      {/* DETAILS SECTION (60% of card height) */}
       <View style={styles.buddyDetailsContainer}>
         <ScrollView 
           style={styles.buddyDetailsScroll}
           contentContainerStyle={styles.buddyDetailsContent}
           showsVerticalScrollIndicator={false}
-          bounces={false} // Prevents bounce effect
+          bounces={false}
         >
           {/* Bio - Main description */}
           <Text style={styles.buddyBio}>{buddy.bio}</Text>
@@ -803,11 +502,7 @@ function BuddyCard({ buddy, onMessage }: { buddy: FishingBuddy; onMessage: () =>
           )}
         </ScrollView>
         
-        {/* 
-          MESSAGE BUTTON
-          - Fixed at bottom of details section
-          - Always visible, doesn't scroll
-        */}
+        {/* MESSAGE BUTTON - Fixed at bottom of details section */}
         <View style={styles.messageButtonContainer}>
           <Pressable style={styles.messageCardButton} onPress={onMessage}>
             <Text style={styles.messageCardButtonText}>SEND MESSAGE</Text>
@@ -833,9 +528,7 @@ function FiltersModal({ visible, filters, onFiltersChange, onClose, onApply, tac
         <View style={styles.filtersCard}>
           <View style={styles.filtersHeader}>
             <Text style={styles.filtersTitle}>FILTER BUDDIES</Text>
-            <Pressable onPress={onClose} style={styles.closeBtn}>
-              <Text style={styles.closeBtnText}>×</Text>
-            </Pressable>
+            <CloseButton onPress={onClose} iconName="chevron-down" />
           </View>
           
           <ScrollView style={styles.filtersContent} showsVerticalScrollIndicator={false}>
@@ -963,9 +656,7 @@ function MessageModal({ visible, buddy, message, onMessageChange, onSend, onClos
         <View style={styles.messageCard}>
           <View style={styles.messageHeader}>
             <Text style={styles.messageTitle}>MESSAGE {buddy.display_name.toUpperCase()}</Text>
-            <Pressable onPress={onClose} style={styles.closeBtn}>
-              <Text style={styles.closeBtnText}>×</Text>
-            </Pressable>
+            <CloseButton onPress={onClose} iconName="close" />
           </View>
           
           <View style={styles.messageContent}>
@@ -1007,19 +698,11 @@ function MessageModal({ visible, buddy, message, onMessageChange, onSend, onClos
 
 const styles = StyleSheet.create({
   // ========== CONTAINER & LAYOUT STYLES ==========
-  /**
-   * Main container that fills entire screen
-   * Uses flex layout to properly distribute space
-   */
   container: { 
     flex: 1, 
     backgroundColor: FishingTheme.colors.background 
   },
   
-  /**
-   * Safe area views for notch/home indicator
-   * Height is set dynamically based on device
-   */
   safeAreaTop: {
     backgroundColor: FishingTheme.colors.background,
   },
@@ -1027,17 +710,10 @@ const styles = StyleSheet.create({
     backgroundColor: FishingTheme.colors.background,
   },
   
-  /**
-   * Main content area between header and navigation
-   * Flexes to fill available space
-   */
   mainContent: {
-    flex: 1, // Takes all available space between header and nav
+    flex: 1,
   },
   
-  /**
-   * Centered content for loading/empty states
-   */
   centeredContent: { 
     flex: 1, 
     justifyContent: 'center', 
@@ -1046,10 +722,6 @@ const styles = StyleSheet.create({
   },
   
   // ========== HEADER STYLES ==========
-  /**
-   * Fixed header at top of screen
-   * Contains title and filter button
-   */
   header: { 
     backgroundColor: FishingTheme.colors.background,
     paddingHorizontal: 20, 
@@ -1064,10 +736,10 @@ const styles = StyleSheet.create({
   },
   titleSection: {
     flex: 1,
-    marginRight: 10, // Space between title and filter button
+    marginRight: 10,
   },
   feedTitle: { 
-    fontSize: 20, // Reduced to fit better
+    fontSize: 20,
     fontWeight: '800', 
     color: FishingTheme.colors.darkGreen, 
     marginBottom: 4,
@@ -1079,10 +751,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   
-  /**
-   * Filter button in top right corner
-   * Shows active indicator when filters applied
-   */
   filterButtonTop: { 
     backgroundColor: FishingTheme.colors.darkGreen, 
     paddingHorizontal: 14, 
@@ -1105,7 +773,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#72E5A2', // Bright green for visibility
+    backgroundColor: '#72E5A2',
     position: 'absolute',
     top: -2,
     right: -2,
@@ -1114,25 +782,17 @@ const styles = StyleSheet.create({
   },
   
   // ========== CARD STACK STYLES ==========
-  /**
-   * Container for swipeable cards
-   * Centers card in available space
-   */
   cardStack: { 
     flex: 1, 
     alignItems: 'center', 
     justifyContent: 'center', 
-    paddingHorizontal: 16, // Reduced padding for more card space
+    paddingHorizontal: 16,
     paddingVertical: 10,
   },
   
-  /**
-   * Individual swipeable card
-   * Fixed dimensions based on available space
-   */
   swipeCard: {
     width: CARD_WIDTH,
-    height: CARD_HEIGHT * 0.85, // Slightly reduced to fit better
+    height: CARD_HEIGHT * 0.85,
     borderRadius: 16,
     backgroundColor: FishingTheme.colors.card,
     borderWidth: 2,
@@ -1142,19 +802,13 @@ const styles = StyleSheet.create({
   },
   
   // ========== BUDDY CARD STYLES ==========
-  /**
-   * Main card container with fixed layout
-   */
   buddyCard: { 
     flex: 1,
     backgroundColor: FishingTheme.colors.card,
   },
   
-  /**
-   * Photo section - 40% of card height
-   */
   photoContainer: { 
-    height: '40%', // Fixed percentage of card
+    height: '40%',
     position: 'relative',
   },
   buddyPhoto: { 
@@ -1181,10 +835,6 @@ const styles = StyleSheet.create({
     fontWeight: '600' 
   },
   
-  /**
-   * Photo overlay with user info
-   * Gradient background for readability
-   */
   photoOverlay: {
     position: 'absolute',
     bottom: 0,
@@ -1226,12 +876,8 @@ const styles = StyleSheet.create({
     opacity: 0.85 
   },
   
-  /**
-   * Details section - 60% of card height
-   * Contains scrollable content and fixed message button
-   */
   buddyDetailsContainer: { 
-    height: '60%', // Fixed percentage of card
+    height: '60%',
     backgroundColor: FishingTheme.colors.card,
   },
   buddyDetailsScroll: {
@@ -1239,7 +885,7 @@ const styles = StyleSheet.create({
   },
   buddyDetailsContent: {
     padding: 16,
-    paddingBottom: 8, // Reduced since button is separate
+    paddingBottom: 8,
   },
   buddyBio: { 
     fontSize: 13, 
@@ -1249,9 +895,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   
-  /**
-   * Detail rows for structured information
-   */
   detailRow: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
@@ -1276,9 +919,6 @@ const styles = StyleSheet.create({
     textAlign: 'right' 
   },
   
-  /**
-   * Tackle and time chips
-   */
   tackleRow: { 
     flexDirection: 'row', 
     flexWrap: 'wrap', 
@@ -1314,9 +954,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   
-  /**
-   * Message button container - fixed at bottom of details
-   */
   messageButtonContainer: {
     padding: 12,
     paddingTop: 8,
@@ -1341,9 +978,6 @@ const styles = StyleSheet.create({
   },
   
   // ========== NAVIGATION STYLES ==========
-  /**
-   * Navigation section at bottom of screen
-   */
   navigationSection: {
     backgroundColor: FishingTheme.colors.background,
     borderTopWidth: 2,
@@ -1366,6 +1000,10 @@ const styles = StyleSheet.create({
     minWidth: 70,
     alignItems: 'center',
   },
+  navButtonLarge: {
+    flex: 0.45, // Makes the buttons larger when only 2
+    paddingHorizontal: 20,
+  },
   navButtonDisabled: { 
     opacity: 0.4,
     backgroundColor: FishingTheme.colors.tan,
@@ -1373,199 +1011,11 @@ const styles = StyleSheet.create({
   navButtonText: { 
     color: FishingTheme.colors.darkGreen, 
     fontWeight: '700',
-    fontSize: 12,
+    fontSize: 14, // Slightly larger font for the bigger buttons
     letterSpacing: 0.3,
   },
   navButtonTextDisabled: { 
     color: FishingTheme.colors.text.muted,
-  },
-  messageButton: { 
-    backgroundColor: FishingTheme.colors.darkGreen, 
-    paddingHorizontal: 20, 
-    paddingVertical: 11, 
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.forestGreen,
-  },
-  messageButtonText: { 
-    color: FishingTheme.colors.cream, 
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    fontSize: 12,
-  },
-  
-  
-  cardStack2: { 
-    flex: 1, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  swipeCard2: {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
-    borderRadius: 16,
-    backgroundColor: FishingTheme.colors.card,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.border,
-    overflow: 'hidden',
-    ...FishingTheme.shadows.md,
-  },
-  
-  buddyCard2: { flex: 1 },
-  photoContainer2: { flex: 0.55, position: 'relative' },
-  buddyPhoto2: { width: '100%', height: '100%' },
-  placeholderPhoto2: { 
-    width: '100%', 
-    height: '100%', 
-    backgroundColor: FishingTheme.colors.sageGreen, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
-  },
-  placeholderText2: { 
-    fontSize: 24, 
-    marginBottom: 8, 
-    color: FishingTheme.colors.cream,
-    fontWeight: '800',
-    letterSpacing: 2,
-  },
-  placeholderName2: { 
-    fontSize: 18, 
-    color: FishingTheme.colors.cream, 
-    fontWeight: '600' 
-  },
-  photoOverlay2: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(47, 69, 56, 0.92)',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  buddyInfo2: { gap: 2 },
-  buddyName2: { 
-    fontSize: 24, 
-    fontWeight: '800', 
-    color: FishingTheme.colors.cream,
-    letterSpacing: -0.5,
-  },
-  buddyLocation2: { fontSize: 13, color: FishingTheme.colors.cream, opacity: 0.95 },
-  buddyHomePort2: { fontSize: 12, color: FishingTheme.colors.cream, opacity: 0.9 },
-  buddyActivity2: { fontSize: 11, color: FishingTheme.colors.cream, marginTop: 2, opacity: 0.85 },
-  buddyInstagram2: { fontSize: 11, color: FishingTheme.colors.cream, marginTop: 2, opacity: 0.85 },
-  
-  buddyDetails: { flex: 0.45, padding: 16, backgroundColor: FishingTheme.colors.card },
-  buddyBio2: { 
-    fontSize: 14, 
-    color: FishingTheme.colors.text.primary, 
-    lineHeight: 20, 
-    marginBottom: 12,
-    fontStyle: 'italic',
-  },
-  detailRow2: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  detailSection2: { gap: 6, marginBottom: 10 },
-  detailLabel2: { 
-    fontSize: 10, 
-    color: FishingTheme.colors.text.tertiary, 
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  detailValue2: { fontSize: 13, color: FishingTheme.colors.text.primary, fontWeight: '600', flex: 1, textAlign: 'right' },
-  tackleRow2: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
-  miniChip2: { 
-    backgroundColor: FishingTheme.colors.darkGreen, 
-    paddingHorizontal: 8, 
-    paddingVertical: 4, 
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: FishingTheme.colors.border,
-  },
-  miniChipText2: { 
-    fontSize: 10, 
-    color: FishingTheme.colors.cream, 
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  timeChip2: { 
-    backgroundColor: FishingTheme.colors.tan, 
-    paddingHorizontal: 8, 
-    paddingVertical: 4, 
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: FishingTheme.colors.border,
-  },
-  timeChipText2: { 
-    fontSize: 10, 
-    color: FishingTheme.colors.darkGreen, 
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
-  
-  messageCardButton2: { 
-    backgroundColor: FishingTheme.colors.darkGreen, 
-    paddingHorizontal: 16, 
-    paddingVertical: 10, 
-    borderRadius: 12, 
-    marginTop: 12,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.forestGreen,
-  },
-  messageCardButtonText2: { 
-    color: FishingTheme.colors.cream, 
-    fontWeight: '800', 
-    textAlign: 'center',
-    letterSpacing: 0.5,
-    fontSize: 13,
-  },
-  
-  navigationButtons2: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    paddingHorizontal: 20, 
-    paddingTop: 16,
-    paddingBottom: 16,
-    backgroundColor: FishingTheme.colors.background,
-    borderTopWidth: 2,
-    borderTopColor: FishingTheme.colors.border,
-  },
-  navButton2: { 
-    backgroundColor: FishingTheme.colors.card, 
-    paddingHorizontal: 12, 
-    paddingVertical: 10, 
-    borderRadius: 12, 
-    borderWidth: 2, 
-    borderColor: FishingTheme.colors.border,
-    minWidth: 70,
-    alignItems: 'center',
-  },
-  navButtonDisabled2: { 
-    opacity: 0.4,
-    backgroundColor: FishingTheme.colors.tan,
-  },
-  navButtonText2: { 
-    color: FishingTheme.colors.darkGreen, 
-    fontWeight: '700',
-    fontSize: 12,
-    letterSpacing: 0.3,
-  },
-  navButtonTextDisabled2: { 
-    color: FishingTheme.colors.text.muted,
-  },
-  messageButton2: { 
-    backgroundColor: FishingTheme.colors.darkGreen, 
-    paddingHorizontal: 20, 
-    paddingVertical: 12, 
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.forestGreen,
-  },
-  messageButtonText2: { 
-    color: FishingTheme.colors.cream, 
-    fontWeight: '800',
-    letterSpacing: 0.5,
   },
   
   // ========== LOADING & EMPTY STATES ==========
@@ -1805,22 +1255,5 @@ const styles = StyleSheet.create({
     fontWeight: '800', 
     textAlign: 'center',
     letterSpacing: 0.5,
-  },
-  
-  closeBtn: { 
-    padding: 8, 
-    borderRadius: 8, 
-    backgroundColor: FishingTheme.colors.card, 
-    borderWidth: 2, 
-    borderColor: FishingTheme.colors.border,
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeBtnText: { 
-    color: FishingTheme.colors.darkGreen, 
-    fontSize: 20,
-    fontWeight: '400',
   },
 });

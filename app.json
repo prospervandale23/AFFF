@@ -1,21 +1,20 @@
 {
   "expo": {
-    "name": "Fishing Buddy",
-    "slug": "fishing-buddy",
+    "name": "Catch Connect",
+    "slug": "catch-connect",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "fishingbuddy",
+    "scheme": "catchconnect",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pvandale766.fishingbuddy",
+      "bundleIdentifier": "com.pvandale766.catchconnect",
       "buildNumber": "1",
       "usesAppleSignIn": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Fishing Buddy uses your location to find nearby fishing buddies and show local fishing conditions.",
-        "NSLocationAlwaysUsageDescription": "Fishing Buddy uses your location to notify you when fishing buddies are nearby.",
+        "NSLocationWhenInUseUsageDescription": "Catch Connect uses your location to find nearby fishing buddies and show local fishing conditions.",
         "NSCameraUsageDescription": "Take photos of your catches to share with the community.",
         "NSPhotoLibraryUsageDescription": "Choose photos from your library to share your fishing adventures.",
         "NSPhotoLibraryAddUsageDescription": "Save catch photos to your photo library."
@@ -29,14 +28,16 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0B1220"
       },
-      "package": "com.pvandale766.fishingbuddy",
+      "package": "com.pvandale766.catchconnect",
       "versionCode": 1,
       "edgeToEdgeEnabled": true,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "CAMERA",
-        "READ_MEDIA_IMAGES"
+        "READ_MEDIA_IMAGES",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
@@ -58,7 +59,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Fishing Buddy to use your location to find nearby fishing buddies."
+          "locationWhenInUsePermission": "Allow Catch Connect to use your location to find nearby fishing buddies."
         }
       ],
       "expo-video"
@@ -66,22 +67,18 @@
     "experiments": {
       "typedRoutes": true
     },
-    "updates": {
-      "fallbackToCacheTimeout": 0,
-      "url": "https://u.expo.dev/5936630a-1186-46dd-a900-09076b302acf"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
-    "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "5936630a-1186-46dd-a900-09076b302acf"
-      }
-    },
     "owner": "pvandale766",
     "runtimeVersion": {
       "policy": "appVersion"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6574fa28-f725-4813-8047-4ba86ec1be9b"
+      }
     }
   }
 }

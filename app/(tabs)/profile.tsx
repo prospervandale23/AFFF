@@ -1,10 +1,13 @@
 import { useFishing } from '@/contexts/FishingContext';
+import * as Linking from 'expo-linking';
 import React, { useEffect, useState } from 'react';
 import {
-  Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Platform
+  Alert, Modal,
+  Platform,
+  Pressable, ScrollView, StyleSheet, Text, TextInput, View
 } from 'react-native';
-import * as Linking from 'expo-linking';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CloseButton } from '../../components/Closebutton';
 import { FishingTheme } from '../../constants/FishingTheme';
 import { supabase } from '../../lib/supabase';
 
@@ -15,9 +18,6 @@ interface SimpleProfile {
   age: string;
   location: string;
   tackle_categories: string[];
-  rod: string;
-  reel: string;
-  line: string;
   experience_level: 'Beginner' | 'Intermediate' | 'Advanced' | null;
   has_boat: boolean;
   boat_type: string;
@@ -26,13 +26,6 @@ interface SimpleProfile {
   favorite_species: string[];
   profile_photo_url: string;
   preferred_fishing_times: string[];
-  tackle_details: {
-    lures: string;
-    bait: string;
-    hooks: string;
-    weights: string;
-    other_gear: string;
-  };
   fishing_type: 'freshwater' | 'saltwater' | null;
 }
 
@@ -47,9 +40,6 @@ export default function ProfileScreen() {
     age: '',
     location: '',
     tackle_categories: [],
-    rod: '',
-    reel: '',
-    line: '',
     experience_level: null,
     has_boat: false,
     boat_type: '',
@@ -58,13 +48,6 @@ export default function ProfileScreen() {
     favorite_species: [],
     profile_photo_url: '',
     preferred_fishing_times: [],
-    tackle_details: {
-      lures: '',
-      bait: '',
-      hooks: '',
-      weights: '',
-      other_gear: ''
-    },
     fishing_type: fishingType
   });
   
@@ -191,9 +174,6 @@ export default function ProfileScreen() {
           age: data.age?.toString() || '',
           location: data.location || '',
           tackle_categories: data.tackle_categories || [],
-          rod: data.rod || '',
-          reel: data.reel || '',
-          line: data.line || '',
           experience_level: data.experience_level,
           has_boat: data.has_boat || false,
           boat_type: data.boat_type || '',
@@ -202,13 +182,6 @@ export default function ProfileScreen() {
           favorite_species: data.favorite_species || [],
           profile_photo_url: data.profile_photo_url || '',
           preferred_fishing_times: data.preferred_fishing_times || [],
-          tackle_details: {
-            lures: data.tackle_details?.lures || '',
-            bait: data.tackle_details?.bait || '',
-            hooks: data.tackle_details?.hooks || '',
-            weights: data.tackle_details?.weights || '',
-            other_gear: data.tackle_details?.other_gear || ''
-          },
           fishing_type: data.fishing_type || fishingType
         });
       } else {
@@ -228,9 +201,6 @@ export default function ProfileScreen() {
       age: '',
       location: '',
       tackle_categories: [],
-      rod: '',
-      reel: '',
-      line: '',
       experience_level: null,
       has_boat: false,
       boat_type: '',
@@ -239,13 +209,6 @@ export default function ProfileScreen() {
       favorite_species: [],
       profile_photo_url: '',
       preferred_fishing_times: [],
-      tackle_details: {
-        lures: '',
-        bait: '',
-        hooks: '',
-        weights: '',
-        other_gear: ''
-      },
       fishing_type: fishingType
     });
   }
@@ -276,9 +239,6 @@ export default function ProfileScreen() {
           age: profile.age ? parseInt(profile.age) : null,
           location: profile.location,
           tackle_categories: profile.tackle_categories,
-          rod: profile.rod,
-          reel: profile.reel,
-          line: profile.line,
           experience_level: profile.experience_level,
           has_boat: profile.has_boat,
           boat_type: profile.boat_type,
@@ -287,7 +247,6 @@ export default function ProfileScreen() {
           favorite_species: profile.favorite_species,
           profile_photo_url: profile.profile_photo_url,
           preferred_fishing_times: profile.preferred_fishing_times,
-          tackle_details: profile.tackle_details,
           fishing_type: fishingType,
           updated_at: new Date().toISOString()
         });
@@ -546,9 +505,7 @@ export default function ProfileScreen() {
           <View style={styles.settingsCard}>
             <View style={styles.settingsHeader}>
               <Text style={styles.settingsTitle}>EDIT PROFILE</Text>
-              <Pressable onPress={() => setSettingsOpen(false)} style={styles.xBtn}>
-                <Text style={styles.xBtnText}>×</Text>
-              </Pressable>
+              <CloseButton onPress={() => setSettingsOpen(false)} iconName="chevron-down" />
             </View>
             
             <ScrollView contentContainerStyle={styles.settingsContent}>
@@ -568,8 +525,6 @@ export default function ProfileScreen() {
                 value={profile.bio}
                 onChangeText={(v) => setProfile(p => ({ ...p, bio: v }))}
                 style={[styles.input, styles.textArea]}
-                multiline
-                numberOfLines={3}
               />
 
               <Text style={styles.label}>HOME PORT</Text>

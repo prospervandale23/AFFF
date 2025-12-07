@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CloseButton } from '../../components/Closebutton';
 
 // Types
 type Buoy = { id: string; name: string; lat: number; lon: number };
@@ -569,10 +570,8 @@ function BuoyPickerModal({
         <View style={styles.modalCard}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>SELECT WEATHER BUOY</Text>
-            <Pressable onPress={onClose} style={styles.modalClose}>
-              <Text style={styles.modalCloseText}>×</Text>
-            </Pressable>
-          </View>
+            <CloseButton onPress={onClose} iconName="chevron-down" />
+  </View>
           <FlatList
             data={buoys}
             keyExtractor={(b) => b.id}

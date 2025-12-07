@@ -11,6 +11,7 @@ import {
   View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CloseButton } from '../../components/Closebutton';
 
 interface SpeciesInfo {
   id: string;
@@ -331,12 +332,7 @@ export default function SpeciesScreen() {
           <View style={[styles.modalContainer, { paddingTop: insets.top }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{selectedSpecies.name.toUpperCase()}</Text>
-              <Pressable
-                style={styles.closeButton}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.closeButtonText}>×</Text>
-              </Pressable>
+              <CloseButton onPress={() => setModalVisible(false)} iconName="chevron-down" />
             </View>
 
             <ScrollView contentContainerStyle={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>

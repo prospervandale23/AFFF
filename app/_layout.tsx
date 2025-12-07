@@ -82,7 +82,7 @@ export default function RootLayout() {
         />
         <View style={styles.logoOverlay}>
           <View style={styles.logoBox}>
-            <Text style={styles.logoText}>AFF</Text>
+            <Text style={styles.logoText}>Catch Connect</Text>
           </View>
           <Text style={styles.appName}>ANGLER FRIEND FINDER</Text>
         </View>
