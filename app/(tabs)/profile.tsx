@@ -1,10 +1,19 @@
 import { useFishing } from '@/contexts/FishingContext';
+import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import React, { useEffect, useState } from 'react';
 import {
-  Alert, Modal,
+  ActionSheetIOS,
+  Alert,
+  Image,
+  Modal,
   Platform,
-  Pressable, ScrollView, StyleSheet, Text, TextInput, View
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CloseButton } from '../../components/Closebutton';
@@ -55,6 +64,7 @@ export default function ProfileScreen() {
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -213,6 +223,196 @@ export default function ProfileScreen() {
     });
   }
 
+  // ========== PHOTO UPLOAD FUNCTIONS ==========
+  
+  async function pickImage() {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancel', 'Take Photo', 'Choose from Library'],
+          cancelButtonIndex: 0,
+        },
+        async (buttonIndex) => {
+          if (buttonIndex === 1) {
+            await takePhoto();
+          } else if (buttonIndex === 2) {
+            await chooseFromLibrary();
+          }
+        }
+      );
+    } else {
+      // Android - show Alert as action sheet
+      Alert.alert(
+        'Profile Photo',
+        'Choose an option',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Take Photo', onPress: takePhoto },
+          { text: 'Choose from Library', onPress: chooseFromLibrary },
+        ]
+      );
+    }
+  }
+
+  async function takePhoto() {
+    try {
+      // Request camera permissions
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Please enable camera access in your device settings to take a photo.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await uploadPhoto(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo. Please try again.');
+    }
+  }
+
+  async function chooseFromLibrary() {
+    try {
+      // Request media library permissions
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Please enable photo library access in your device settings to choose a photo.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await uploadPhoto(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error choosing photo:', error);
+      Alert.alert('Error', 'Failed to choose photo. Please try again.');
+    }
+  }
+
+  async function uploadPhoto(uri: string) {
+    try {
+      setUploadingPhoto(true);
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        Alert.alert('Error', 'You must be signed in to upload a photo');
+        return;
+      }
+
+      const userId = session.user.id;
+      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `${userId}-${Date.now()}.${fileExt}`;
+      const filePath = `profile-photos/${fileExt}`;
+
+      // Convert URI to blob for upload
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('profiles')
+        .upload(filePath, blob, {
+          contentType: `image/${fileExt}`,
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
+
+      // Get the public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('profiles')
+        .getPublicUrl(filePath);
+
+      // Update the profile with the new photo URL
+      setProfile(prev => ({ ...prev, profile_photo_url: publicUrl }));
+
+      // Also update in database immediately
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ 
+          profile_photo_url: publicUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (updateError) {
+        console.error('Error updating profile photo URL:', updateError);
+      }
+
+      console.log('✅ Photo uploaded successfully:', publicUrl);
+      
+    } catch (error: any) {
+      console.error('💥 Photo upload error:', error);
+      Alert.alert('Upload Failed', error.message || 'Failed to upload photo. Please try again.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
+  async function removePhoto() {
+    Alert.alert(
+      'Remove Photo',
+      'Are you sure you want to remove your profile photo?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Remove', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (!session?.user) return;
+
+              // Update profile to remove photo URL
+              await supabase
+                .from('profiles')
+                .update({ 
+                  profile_photo_url: null,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', session.user.id);
+
+              setProfile(prev => ({ ...prev, profile_photo_url: '' }));
+              console.log('✅ Photo removed');
+            } catch (error) {
+              console.error('Error removing photo:', error);
+            }
+          }
+        },
+      ]
+    );
+  }
+
+  // ========== END PHOTO UPLOAD FUNCTIONS ==========
+
   async function saveProfile() {
     console.log('💾 Attempting to save profile...');
     
@@ -367,9 +567,9 @@ export default function ProfileScreen() {
     return (
       <View style={[styles.container, styles.centered, { paddingTop: insets.top + 20 }]}>
         <View style={styles.logoBox}>
-          <Text style={styles.logoText}>AFF</Text>
+          <Text style={styles.logoText}>CC</Text>
         </View>
-        <Text style={styles.sectionTitle}>ANGLER FRIEND FINDER</Text>
+        <Text style={styles.sectionTitle}>CATCH CONNECT</Text>
         <Text style={styles.signInText}>
           Create your {fishingType} fishing profile and connect with other anglers instantly!
         </Text>
@@ -409,6 +609,45 @@ export default function ProfileScreen() {
           <Pressable style={styles.signOutButton} onPress={signOut}>
             <Text style={styles.signOutText}>SIGN OUT</Text>
           </Pressable>
+        </View>
+
+        {/* PROFILE PHOTO SECTION */}
+        <View style={styles.photoSection}>
+          <Pressable onPress={pickImage} disabled={uploadingPhoto}>
+            {profile.profile_photo_url ? (
+              <Image 
+                source={{ uri: profile.profile_photo_url }} 
+                style={styles.profilePhoto}
+              />
+            ) : (
+              <View style={styles.profilePhotoPlaceholder}>
+                <Text style={styles.photoPlaceholderText}>
+                  {profile.display_name ? profile.display_name.charAt(0).toUpperCase() : '?'}
+                </Text>
+              </View>
+            )}
+            <View style={styles.photoEditBadge}>
+              <Text style={styles.photoEditText}>
+                {uploadingPhoto ? '...' : '📷'}
+              </Text>
+            </View>
+          </Pressable>
+          <View style={styles.photoButtons}>
+            <Pressable 
+              style={styles.changePhotoButton} 
+              onPress={pickImage}
+              disabled={uploadingPhoto}
+            >
+              <Text style={styles.changePhotoText}>
+                {uploadingPhoto ? 'UPLOADING...' : 'CHANGE PHOTO'}
+              </Text>
+            </Pressable>
+            {profile.profile_photo_url ? (
+              <Pressable style={styles.removePhotoButton} onPress={removePhoto}>
+                <Text style={styles.removePhotoText}>REMOVE</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
         
         <View style={styles.profileSection}>
@@ -509,6 +748,32 @@ export default function ProfileScreen() {
             </View>
             
             <ScrollView contentContainerStyle={styles.settingsContent}>
+              {/* Photo upload in modal too */}
+              <Text style={styles.label}>PROFILE PHOTO</Text>
+              <View style={styles.modalPhotoSection}>
+                <Pressable onPress={pickImage} disabled={uploadingPhoto}>
+                  {profile.profile_photo_url ? (
+                    <Image 
+                      source={{ uri: profile.profile_photo_url }} 
+                      style={styles.modalProfilePhoto}
+                    />
+                  ) : (
+                    <View style={styles.modalProfilePhotoPlaceholder}>
+                      <Text style={styles.modalPhotoPlaceholderText}>+</Text>
+                    </View>
+                  )}
+                </Pressable>
+                <Pressable 
+                  style={styles.modalChangePhotoButton} 
+                  onPress={pickImage}
+                  disabled={uploadingPhoto}
+                >
+                  <Text style={styles.modalChangePhotoText}>
+                    {uploadingPhoto ? 'UPLOADING...' : profile.profile_photo_url ? 'CHANGE' : 'ADD PHOTO'}
+                  </Text>
+                </Pressable>
+              </View>
+
               <Text style={styles.label}>DISPLAY NAME</Text>
               <TextInput
                 placeholder="What should people call you?"
@@ -525,6 +790,7 @@ export default function ProfileScreen() {
                 value={profile.bio}
                 onChangeText={(v) => setProfile(p => ({ ...p, bio: v }))}
                 style={[styles.input, styles.textArea]}
+                multiline
               />
 
               <Text style={styles.label}>HOME PORT</Text>
@@ -743,6 +1009,127 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
   },
+
+  // Photo section styles
+  photoSection: {
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  profilePhoto: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: FishingTheme.colors.darkGreen,
+  },
+  profilePhotoPlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: FishingTheme.colors.sageGreen,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: FishingTheme.colors.darkGreen,
+  },
+  photoPlaceholderText: {
+    fontSize: 48,
+    fontWeight: '800',
+    color: FishingTheme.colors.cream,
+  },
+  photoEditBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: FishingTheme.colors.darkGreen,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.cream,
+  },
+  photoEditText: {
+    fontSize: 16,
+  },
+  photoButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  changePhotoButton: {
+    backgroundColor: FishingTheme.colors.darkGreen,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.forestGreen,
+  },
+  changePhotoText: {
+    color: FishingTheme.colors.cream,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  removePhotoButton: {
+    backgroundColor: FishingTheme.colors.card,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.status.poor,
+  },
+  removePhotoText: {
+    color: FishingTheme.colors.status.poor,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+
+  // Modal photo styles
+  modalPhotoSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 8,
+  },
+  modalProfilePhoto: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.darkGreen,
+  },
+  modalProfilePhotoPlaceholder: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: FishingTheme.colors.sageGreen,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.darkGreen,
+  },
+  modalPhotoPlaceholderText: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: FishingTheme.colors.cream,
+  },
+  modalChangePhotoButton: {
+    backgroundColor: FishingTheme.colors.card,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.darkGreen,
+  },
+  modalChangePhotoText: {
+    color: FishingTheme.colors.darkGreen,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
   
   profileSection: { gap: 8 },
   profileLabel: { 
@@ -859,22 +1246,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1,
   },
-  xBtn: { 
-    padding: 8, 
-    borderRadius: 8, 
-    backgroundColor: FishingTheme.colors.card, 
-    borderWidth: 2, 
-    borderColor: FishingTheme.colors.border,
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  xBtnText: { 
-    color: FishingTheme.colors.darkGreen, 
-    fontSize: 20,
-    fontWeight: '400',
-  },
   settingsContent: { padding: 16, gap: 10 },
   label: { 
     color: FishingTheme.colors.text.tertiary, 
@@ -934,14 +1305,6 @@ const styles = StyleSheet.create({
   saveBtnText: { 
     color: FishingTheme.colors.cream, 
     fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  sectionHeader: { 
-    color: FishingTheme.colors.darkGreen, 
-    fontSize: 16, 
-    fontWeight: '800', 
-    marginTop: 16, 
-    marginBottom: 8,
     letterSpacing: 0.5,
   },
 });

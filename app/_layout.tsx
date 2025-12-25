@@ -1,8 +1,76 @@
-import { ResizeMode, Video } from 'expo-av';
 import { Stack } from 'expo-router';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { FishingProvider } from '../contexts/FishingContext';
+
+const splashVideo = require('../assets/videos/splash.mp4');
+
+export default function RootLayout() {
+  const [showSplash, setShowSplash] = useState(true);
+
+  const player = useVideoPlayer(splashVideo, player => {
+    player.loop = false;
+    player.muted = true;
+    player.play();
+  });
+
+  useEffect(() => {
+    // Fallback timer in case video doesn't trigger completion
+    const timer = setTimeout(() => setShowSplash(false), 4000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Listen for video completion
+  useEffect(() => {
+    if (!player) return;
+
+    const subscription = player.addListener('playToEnd', () => {
+      setShowSplash(false);
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, [player]);
+
+  if (showSplash) {
+    return (
+      <View style={styles.splashContainer}>
+        <VideoView
+          style={styles.video}
+          player={player}
+          contentFit="cover"
+          nativeControls={false}
+          allowsFullscreen={false}
+        />
+        <View style={styles.logoOverlay}>
+          <View style={styles.logoBox}>
+            <Text style={styles.logoText}>CC</Text>
+          </View>
+          <Text style={styles.appName}>CATCH CONNECT</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <FishingProvider>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen 
+          name="conversation/[id]" 
+          options={{
+            presentation: 'card',
+            animation: 'slide_from_right',
+          }}
+        />
+        <Stack.Screen name="terms" />
+      </Stack>
+    </FishingProvider>
+  );
+}
 
 const styles = StyleSheet.create({
   splashContainer: {
@@ -10,9 +78,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8DCC4',
   },
   video: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
+    ...StyleSheet.absoluteFillObject,
   },
   logoOverlay: {
     position: 'absolute',
@@ -56,46 +122,3 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
 });
-
-export default function RootLayout() {
-  const [showSplash, setShowSplash] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 4000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (showSplash) {
-    return (
-      <View style={styles.splashContainer}>
-        <Video
-          source={require('../assets/videos/splash.mp4')}
-          style={styles.video}
-          resizeMode={ResizeMode.COVER}
-          shouldPlay
-          isLooping={false}
-          onPlaybackStatusUpdate={(status) => {
-            if (status.isLoaded && status.didJustFinish) {
-              setShowSplash(false);
-            }
-          }}
-        />
-        <View style={styles.logoOverlay}>
-          <View style={styles.logoBox}>
-            <Text style={styles.logoText}>Catch Connect</Text>
-          </View>
-          <Text style={styles.appName}>ANGLER FRIEND FINDER</Text>
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <FishingProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(tabs)" />
-      </Stack>
-    </FishingProvider>
-  );
-}

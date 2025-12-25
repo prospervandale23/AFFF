@@ -15,8 +15,8 @@
       "usesAppleSignIn": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Catch Connect uses your location to find nearby fishing buddies and show local fishing conditions.",
-        "NSCameraUsageDescription": "Take photos of your catches to share with the community.",
-        "NSPhotoLibraryUsageDescription": "Choose photos from your library to share your fishing adventures.",
+        "NSCameraUsageDescription": "Take photos of your catches and profile to share with the fishing community.",
+        "NSPhotoLibraryUsageDescription": "Choose photos from your library to upload to your profile and share your fishing adventures.",
         "NSPhotoLibraryAddUsageDescription": "Save catch photos to your photo library."
       },
       "config": {
@@ -62,6 +62,8 @@
           "locationWhenInUsePermission": "Allow Catch Connect to use your location to find nearby fishing buddies."
         }
       ],
+      "expo-image-picker",
+      "expo-apple-authentication",
       "expo-video"
     ],
     "experiments": {

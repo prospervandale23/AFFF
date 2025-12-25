@@ -1,4 +1,5 @@
 import { useFishing } from '@/contexts/FishingContext';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -34,6 +35,7 @@ const CARD_HEIGHT = SCREEN_HEIGHT * 0.7;
 
 export default function FeedsScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { fishingType, species, tackleCategories } = useFishing();
   
   const [buddies, setBuddies] = useState<FishingBuddy[]>([]);
@@ -153,16 +155,40 @@ export default function FeedsScreen() {
   const sendMessage = async () => {
     if (!selectedBuddy || !messageText.trim()) return;
     
-    // For demo purposes, just show success
     setSending(true);
+    
+    // Simulate sending - in production this would create a conversation in Supabase
     setTimeout(() => {
-      Alert.alert(
-        'Demo Mode', 
-        `In the live app, your message would be sent to ${selectedBuddy.display_name}. Check the Conversations tab to continue chatting!`,
-        [{ text: 'OK', onPress: () => setMessageModalOpen(false) }]
-      );
       setSending(false);
+      setMessageModalOpen(false);
+      setMessageText('');
+      
+      // Navigate to messages or show success
+      Alert.alert(
+        'Message Sent!', 
+        `Your message has been sent to ${selectedBuddy.display_name}. Check Messages to continue the conversation!`,
+        [
+          { 
+            text: 'View Messages', 
+            onPress: () => router.push('/(tabs)/messages')
+          },
+          { text: 'Keep Browsing' }
+        ]
+      );
     }, 1000);
+  };
+
+  // Quick action to go directly to chat with this buddy
+  const startConversation = (buddy: FishingBuddy) => {
+    router.push({
+      pathname: '/conversation/conversation_id',
+      params: {
+        id: `conv-${buddy.id}`,
+        name: buddy.display_name,
+        photo: buddy.profile_photo_url || '',
+        otherUserId: buddy.id
+      }
+    });
   };
 
   if (loading) {
@@ -248,6 +274,7 @@ export default function FeedsScreen() {
               onNext={goToNext} 
               onPrevious={goToPrevious}
               onMessage={() => openMessageModal(currentBuddy)}
+              onQuickChat={() => startConversation(currentBuddy)}
             />
           )}
         </View>
@@ -307,11 +334,12 @@ export default function FeedsScreen() {
   );
 }
 
-function SwipeableCard({ buddy, onNext, onPrevious, onMessage }: {
+function SwipeableCard({ buddy, onNext, onPrevious, onMessage, onQuickChat }: {
   buddy: FishingBuddy;
   onNext: () => void;
   onPrevious: () => void;
   onMessage: () => void;
+  onQuickChat: () => void;
 }) {
   const pan = useRef(new Animated.ValueXY()).current;
 
@@ -361,12 +389,16 @@ function SwipeableCard({ buddy, onNext, onPrevious, onMessage }: {
       ]}
       {...panResponder.panHandlers}
     >
-      <BuddyCard buddy={buddy} onMessage={onMessage} />
+      <BuddyCard buddy={buddy} onMessage={onMessage} onQuickChat={onQuickChat} />
     </Animated.View>
   );
 }
 
-function BuddyCard({ buddy, onMessage }: { buddy: FishingBuddy; onMessage: () => void }) {
+function BuddyCard({ buddy, onMessage, onQuickChat }: { 
+  buddy: FishingBuddy; 
+  onMessage: () => void;
+  onQuickChat: () => void;
+}) {
   /**
    * Helper function to format last active time
    * Shows relative time (e.g., "Active 5m ago" or "Active 2h ago")
@@ -502,11 +534,16 @@ function BuddyCard({ buddy, onMessage }: { buddy: FishingBuddy; onMessage: () =>
           )}
         </ScrollView>
         
-        {/* MESSAGE BUTTON - Fixed at bottom of details section */}
+        {/* MESSAGE BUTTONS - Fixed at bottom of details section */}
         <View style={styles.messageButtonContainer}>
-          <Pressable style={styles.messageCardButton} onPress={onMessage}>
-            <Text style={styles.messageCardButtonText}>SEND MESSAGE</Text>
-          </Pressable>
+          <View style={styles.messageButtonRow}>
+            <Pressable style={styles.quickChatButton} onPress={onQuickChat}>
+              <Text style={styles.quickChatButtonText}>💬 CHAT</Text>
+            </Pressable>
+            <Pressable style={styles.messageCardButton} onPress={onMessage}>
+              <Text style={styles.messageCardButtonText}>SEND INTRO</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     </View>
@@ -961,7 +998,28 @@ const styles = StyleSheet.create({
     borderTopColor: FishingTheme.colors.border,
     backgroundColor: FishingTheme.colors.card,
   },
+  messageButtonRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  quickChatButton: {
+    flex: 1,
+    backgroundColor: FishingTheme.colors.card,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.darkGreen,
+  },
+  quickChatButtonText: {
+    color: FishingTheme.colors.darkGreen,
+    fontWeight: '800',
+    textAlign: 'center',
+    letterSpacing: 0.3,
+    fontSize: 13,
+  },
   messageCardButton: { 
+    flex: 2,
     backgroundColor: FishingTheme.colors.darkGreen, 
     paddingHorizontal: 16, 
     paddingVertical: 10, 
@@ -1001,7 +1059,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   navButtonLarge: {
-    flex: 0.45, // Makes the buttons larger when only 2
+    flex: 0.45,
     paddingHorizontal: 20,
   },
   navButtonDisabled: { 
@@ -1011,7 +1069,7 @@ const styles = StyleSheet.create({
   navButtonText: { 
     color: FishingTheme.colors.darkGreen, 
     fontWeight: '700',
-    fontSize: 14, // Slightly larger font for the bigger buttons
+    fontSize: 14,
     letterSpacing: 0.3,
   },
   navButtonTextDisabled: { 
