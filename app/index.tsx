@@ -1,4 +1,5 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useState } from 'react';
@@ -54,15 +55,55 @@ export default function WelcomeScreen() {
     }
   }
 
-  // --- Actions ---
+  async function ensureProfileExists(userId: string, displayName?: string) {
+    try {
+      const { data: existingProfile, error: fetchError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', userId)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('Error checking profile:', fetchError);
+        return;
+      }
+
+      if (!existingProfile) {
+        console.log('Creating profile for new user:', userId);
+        
+        const { error: insertError } = await supabase.from('profiles').insert({
+          id: userId,
+          display_name: displayName || 'New Angler',
+          fishing_type: null,
+          experience_level: null,
+          has_boat: false,
+          bio: '',
+          home_port: '',
+          location: '',
+          age: null,
+          boat_type: '',
+          boat_length: '',
+          profile_photo_url: null
+        });
+
+        if (insertError) {
+          console.error('Error creating profile:', insertError);
+        } else {
+          console.log('Profile created successfully');
+        }
+      } else {
+        console.log('Profile already exists for user:', userId);
+      }
+    } catch (error) {
+      console.error('Error in ensureProfileExists:', error);
+    }
+  }
 
   const handleEmailSignIn = () => {
-    // Navigate to your email login screen (make sure you create this route!)
     router.push('//auth/email-signin'); 
   };
 
   const handleTermsClick = () => {
-    // Navigate to the new Terms screen
     router.push('/terms');
   };
 
@@ -70,30 +111,52 @@ export default function WelcomeScreen() {
     try {
       setSigningIn(true);
       setErrorMessage('');
+      
+      // Generate a secure nonce for Apple Sign In
+      const rawNonce = Crypto.randomUUID();
+      const hashedNonce = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        rawNonce
+      );
+      
+      console.log('🍎 Starting Apple Sign In with nonce...');
+      
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
         ],
+        nonce: hashedNonce, // Pass HASHED nonce to Apple
       });
+
+      console.log('🍎 Apple credential received:');
+      console.log('   - Apple User ID:', credential.user);
+      console.log('   - Email:', credential.email);
 
       const { data, error } = await supabase.auth.signInWithIdToken({
         provider: 'apple',
         token: credential.identityToken!,
+        nonce: rawNonce, // Pass RAW nonce to Supabase
       });
+
+      console.log('🔐 Supabase auth result:');
+      console.log('   - Supabase User ID:', data.user?.id);
+      console.log('   - Email:', data.user?.email);
 
       if (error) throw error;
       
-      // Update profile name if available
-      if (credential.fullName && data.user) {
-        const displayName = [credential.fullName.givenName, credential.fullName.familyName].filter(Boolean).join(' ');
-        if (displayName) {
-          await supabase.from('profiles').update({ display_name: displayName }).eq('id', data.user.id);
-        }
+      if (data.user) {
+        const displayName = credential.fullName
+          ? [credential.fullName.givenName, credential.fullName.familyName].filter(Boolean).join(' ')
+          : undefined;
+
+        await ensureProfileExists(data.user.id, displayName);
       }
+
       router.replace('/(tabs)/home');
     } catch (error: any) {
       if (error.code !== 'ERR_REQUEST_CANCELED') {
+        console.error('🍎 Apple Sign In Error:', error);
         setErrorMessage(`Apple Error: ${error.message}`);
       }
     } finally {
@@ -105,8 +168,14 @@ export default function WelcomeScreen() {
     try {
       setSigningIn(true);
       setErrorMessage('');
-      const { error } = await supabase.auth.signInAnonymously();
+      
+      const { data, error } = await supabase.auth.signInAnonymously();
       if (error) throw error;
+
+      if (data.user) {
+        await ensureProfileExists(data.user.id, 'Guest Angler');
+      }
+
       router.replace('/(tabs)/home');
     } catch (error: any) {
       setErrorMessage(`Error: ${error.message}`);
@@ -176,7 +245,6 @@ export default function WelcomeScreen() {
               </Text>
             </Pressable>
 
-            {/* HYPERLINK */}
             <Text style={styles.disclaimer}>
               By registering for this app you agree to our{' '}
               <Text style={styles.linkText} onPress={handleTermsClick}>

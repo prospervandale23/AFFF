@@ -1,6 +1,7 @@
 import { useFishing } from '@/contexts/FishingContext';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActionSheetIOS,
@@ -26,21 +27,18 @@ interface SimpleProfile {
   home_port: string;
   age: string;
   location: string;
-  tackle_categories: string[];
   experience_level: 'Beginner' | 'Intermediate' | 'Advanced' | null;
   has_boat: boolean;
   boat_type: string;
   boat_length: string;
-  boat_name: string;
-  favorite_species: string[];
   profile_photo_url: string;
-  preferred_fishing_times: string[];
   fishing_type: 'freshwater' | 'saltwater' | null;
 }
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { fishingType, species, tackleCategories } = useFishing();
+  const { fishingType } = useFishing();
+  const router = useRouter();
   
   const [profile, setProfile] = useState<SimpleProfile>({
     display_name: '',
@@ -48,15 +46,11 @@ export default function ProfileScreen() {
     home_port: '',
     age: '',
     location: '',
-    tackle_categories: [],
     experience_level: null,
     has_boat: false,
     boat_type: '',
     boat_length: '',
-    boat_name: '',
-    favorite_species: [],
     profile_photo_url: '',
-    preferred_fishing_times: [],
     fishing_type: fishingType
   });
   
@@ -68,7 +62,6 @@ export default function ProfileScreen() {
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('🔥 ProfileScreen mounted, starting auth initialization...');
     initializeAuth();
   }, []);
 
@@ -79,26 +72,13 @@ export default function ProfileScreen() {
   }, [fishingType]);
 
   async function initializeAuth() {
-    console.log('🚀 initializeAuth called');
-    
     try {
       setLoading(true);
       setAuthError(null);
       
-      console.log('🔍 Checking for existing session...');
-      
       const { data: { session }, error } = await supabase.auth.getSession();
       
-      console.log('📊 Session check result:', {
-        hasSession: !!session,
-        hasUser: !!session?.user,
-        userEmail: session?.user?.email || 'no email',
-        userId: session?.user?.id || 'no id',
-        error: error?.message || 'no error'
-      });
-      
       if (error) {
-        console.error('❌ Session check error:', error);
         setAuthError(error.message);
         setIsSignedIn(false);
         setLoading(false);
@@ -106,125 +86,96 @@ export default function ProfileScreen() {
       }
 
       if (session && session.user) {
-        console.log('✅ Found existing session for:', session.user.email);
         setIsSignedIn(true);
         await loadProfile(session.user.id);
       } else {
-        console.log('❌ No existing session found');
         setIsSignedIn(false);
       }
     } catch (error) {
-      console.error('💥 Auth initialization error:', error);
       setAuthError('Failed to initialize authentication');
       setIsSignedIn(false);
     } finally {
-      console.log('🏁 Setting loading to false');
       setLoading(false);
     }
 
-    console.log('👂 Setting up auth state listener...');
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔄 Auth state changed!');
-      console.log('📧 Event:', event);
-      console.log('👤 User email:', session?.user?.email || 'none');
-      console.log('🆔 User ID:', session?.user?.id || 'none');
-      
       try {
         if (event === 'SIGNED_IN' && session?.user) {
-          console.log('✅ User signed in successfully:', session.user.email);
           setIsSignedIn(true);
           setAuthError(null);
           await loadProfile(session.user.id);
         } else if (event === 'SIGNED_OUT') {
-          console.log('❌ User signed out');
           setIsSignedIn(false);
           setAuthError(null);
           resetProfile();
         } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-          console.log('🔄 Token refreshed for:', session.user.email);
           if (isSignedIn) {
             await loadProfile(session.user.id);
           }
-        } else {
-          console.log('🤷 Unhandled auth event:', event);
         }
       } catch (error) {
-        console.error('💥 Error handling auth state change:', error);
         setAuthError('Authentication error occurred');
       }
     });
 
     return () => {
-      console.log('🧹 Cleaning up auth listener');
       subscription.unsubscribe();
     };
   }
 
-  async function loadProfile(userId: string) {
-    console.log('📖 Loading profile for user:', userId);
-    
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+async function loadProfile(userId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('❌ Error loading profile:', error);
-        return;
-      }
-
-      if (data) {
-        console.log('✅ Profile loaded successfully for:', data.display_name || 'unnamed user');
-        setProfile({
-          display_name: data.display_name || '',
-          bio: data.bio || '',
-          home_port: data.home_port || '',
-          age: data.age?.toString() || '',
-          location: data.location || '',
-          tackle_categories: data.tackle_categories || [],
-          experience_level: data.experience_level,
-          has_boat: data.has_boat || false,
-          boat_type: data.boat_type || '',
-          boat_length: data.boat_length || '',
-          boat_name: data.boat_name || '',
-          favorite_species: data.favorite_species || [],
-          profile_photo_url: data.profile_photo_url || '',
-          preferred_fishing_times: data.preferred_fishing_times || [],
-          fishing_type: data.fishing_type || fishingType
-        });
-      } else {
-        console.log('📝 No profile found, using defaults');
-      }
-    } catch (error) {
-      console.error('💥 Load profile error:', error);
+    if (error && error.code !== 'PGRST116') {
+      return;
     }
+
+    if (data) {
+      // Add cache-busting for profile photo
+      const photoUrl = data.profile_photo_url 
+        ? `${data.profile_photo_url}?t=${Date.now()}` 
+        : '';
+      
+      setProfile({
+        display_name: data.display_name || '',
+        bio: data.bio || '',
+        home_port: data.home_port || '',
+        age: data.age?.toString() || '',
+        location: data.location || '',
+        experience_level: data.experience_level,
+        has_boat: data.has_boat || false,
+        boat_type: data.boat_type || '',
+        boat_length: data.boat_length || '',
+        profile_photo_url: photoUrl,
+        fishing_type: data.fishing_type || fishingType
+      });
+    }
+  } catch (error) {
+    console.error('Load profile error:', error);
   }
+}
 
   function resetProfile() {
-    console.log('🔄 Resetting profile to defaults');
     setProfile({
       display_name: '',
       bio: '',
       home_port: '',
       age: '',
       location: '',
-      tackle_categories: [],
       experience_level: null,
       has_boat: false,
       boat_type: '',
       boat_length: '',
-      boat_name: '',
-      favorite_species: [],
       profile_photo_url: '',
-      preferred_fishing_times: [],
       fishing_type: fishingType
     });
   }
 
-  // ========== PHOTO UPLOAD FUNCTIONS ==========
-  
   async function pickImage() {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
@@ -233,236 +184,190 @@ export default function ProfileScreen() {
           cancelButtonIndex: 0,
         },
         async (buttonIndex) => {
-          if (buttonIndex === 1) {
-            await takePhoto();
-          } else if (buttonIndex === 2) {
-            await chooseFromLibrary();
-          }
+          if (buttonIndex === 1) await takePhoto();
+          else if (buttonIndex === 2) await chooseFromLibrary();
         }
       );
     } else {
-      // Android - show Alert as action sheet
-      Alert.alert(
-        'Profile Photo',
-        'Choose an option',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Take Photo', onPress: takePhoto },
-          { text: 'Choose from Library', onPress: chooseFromLibrary },
-        ]
-      );
+      Alert.alert('Profile Photo', 'Choose an option', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Take Photo', onPress: takePhoto },
+        { text: 'Choose from Library', onPress: chooseFromLibrary },
+      ]);
     }
   }
 
   async function takePhoto() {
     try {
-      // Request camera permissions
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      
-      if (status !== 'granted') {
-        Alert.alert(
-          'Permission Required',
-          'Please enable camera access in your device settings to take a photo.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-
+      if (status !== 'granted') return;
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
-
-      if (!result.canceled && result.assets[0]) {
-        await uploadPhoto(result.assets[0].uri);
-      }
+      if (!result.canceled && result.assets[0]) await uploadPhoto(result.assets[0].uri);
     } catch (error) {
-      console.error('Error taking photo:', error);
-      Alert.alert('Error', 'Failed to take photo. Please try again.');
+      Alert.alert('Error', 'Failed to take photo.');
     }
   }
 
   async function chooseFromLibrary() {
     try {
-      // Request media library permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
-      if (status !== 'granted') {
-        Alert.alert(
-          'Permission Required',
-          'Please enable photo library access in your device settings to choose a photo.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-
+      if (status !== 'granted') return;
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
-
-      if (!result.canceled && result.assets[0]) {
-        await uploadPhoto(result.assets[0].uri);
-      }
+      if (!result.canceled && result.assets[0]) await uploadPhoto(result.assets[0].uri);
     } catch (error) {
-      console.error('Error choosing photo:', error);
-      Alert.alert('Error', 'Failed to choose photo. Please try again.');
+      Alert.alert('Error', 'Failed to choose photo.');
     }
   }
 
   async function uploadPhoto(uri: string) {
-    try {
-      setUploadingPhoto(true);
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        Alert.alert('Error', 'You must be signed in to upload a photo');
-        return;
-      }
-
-      const userId = session.user.id;
-      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
-      const fileName = `${userId}-${Date.now()}.${fileExt}`;
-      const filePath = `profile-photos/${fileExt}`;
-
-      // Convert URI to blob for upload
-      const response = await fetch(uri);
-      const blob = await response.blob();
-
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('profiles')
-        .upload(filePath, blob, {
-          contentType: `image/${fileExt}`,
-          upsert: true,
-        });
-
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        throw uploadError;
-      }
-
-      // Get the public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('profiles')
-        .getPublicUrl(filePath);
-
-      // Update the profile with the new photo URL
-      setProfile(prev => ({ ...prev, profile_photo_url: publicUrl }));
-
-      // Also update in database immediately
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ 
-          profile_photo_url: publicUrl,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId);
-
-      if (updateError) {
-        console.error('Error updating profile photo URL:', updateError);
-      }
-
-      console.log('✅ Photo uploaded successfully:', publicUrl);
-      
-    } catch (error: any) {
-      console.error('💥 Photo upload error:', error);
-      Alert.alert('Upload Failed', error.message || 'Failed to upload photo. Please try again.');
-    } finally {
-      setUploadingPhoto(false);
+  try {
+    setUploadingPhoto(true);
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
+      Alert.alert('Error', 'You must be signed in to upload a photo');
+      return;
     }
+
+    const userId = session.user.id;
+    const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+    const filePath = `${userId}/profile.${fileExt}`;
+    
+    console.log('📸 Upload path:', filePath);
+    
+    // Fetch as arraybuffer instead of blob
+    const response = await fetch(uri);
+    const arrayBuffer = await response.arrayBuffer();
+    
+    console.log('📦 ArrayBuffer size:', arrayBuffer.byteLength);
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('profile-photos')
+      .upload(filePath, arrayBuffer, { 
+        contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
+        upsert: true 
+      });
+
+    if (uploadError) {
+      console.log('❌ Upload error:', uploadError);
+      throw uploadError;
+    }
+    
+    console.log('✅ Upload success:', uploadData);
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('profile-photos')
+      .getPublicUrl(filePath);
+
+    console.log('🔗 Public URL:', publicUrl);
+
+    const photoUrlWithTimestamp = `${publicUrl}?t=${Date.now()}`;
+
+    setProfile(prev => ({ ...prev, profile_photo_url: photoUrlWithTimestamp }));
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ 
+        profile_photo_url: publicUrl,
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', userId);
+
+    if (updateError) {
+      console.log('❌ Profile update error:', updateError);
+      Alert.alert('Warning', 'Photo uploaded but profile update failed: ' + updateError.message);
+    } else {
+      console.log('✅ Profile updated with photo URL');
+    }
+
+  } catch (error: any) {
+    console.log('❌ Upload failed:', error);
+    Alert.alert('Upload Failed', error.message);
+  } finally {
+    setUploadingPhoto(false);
   }
+}
 
   async function removePhoto() {
-    Alert.alert(
-      'Remove Photo',
-      'Are you sure you want to remove your profile photo?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Remove', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { data: { session } } = await supabase.auth.getSession();
-              if (!session?.user) return;
+    Alert.alert('Remove Photo', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      { 
+        text: 'Remove', 
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) return;
 
-              // Update profile to remove photo URL
-              await supabase
-                .from('profiles')
-                .update({ 
-                  profile_photo_url: null,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', session.user.id);
+            const userId = session.user.id;
 
-              setProfile(prev => ({ ...prev, profile_photo_url: '' }));
-              console.log('✅ Photo removed');
-            } catch (error) {
-              console.error('Error removing photo:', error);
+            const { error: deleteError } = await supabase.storage
+              .from('profile-photos')
+              .remove([`${userId}/profile.jpg`, `${userId}/profile.png`, `${userId}/profile.webp`]);
+
+            if (deleteError) {
+              console.warn('Could not delete from storage:', deleteError);
             }
+
+            await supabase
+              .from('profiles')
+              .update({ profile_photo_url: null, updated_at: new Date().toISOString() })
+              .eq('id', session.user.id);
+
+            setProfile(prev => ({ ...prev, profile_photo_url: '' }));
+          } catch (error) {
+            console.error('Error removing photo:', error);
           }
-        },
-      ]
-    );
+        }
+      },
+    ]);
   }
 
-  // ========== END PHOTO UPLOAD FUNCTIONS ==========
-
   async function saveProfile() {
-    console.log('💾 Attempting to save profile...');
-    
     try {
       setSaving(true);
       
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError || !session) {
-        console.error('❌ No valid session for saving profile');
-        Alert.alert('Error', 'You must be signed in to save your profile');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        Alert.alert('Error', 'No active session');
         return;
       }
 
-      console.log('💾 Saving profile for user:', session.user.id);
-
-      const { error } = await supabase
-        .from('profiles')
-        .upsert({
-          id: session.user.id,
-          display_name: profile.display_name,
-          bio: profile.bio,
-          home_port: profile.home_port,
-          age: profile.age ? parseInt(profile.age) : null,
-          location: profile.location,
-          tackle_categories: profile.tackle_categories,
-          experience_level: profile.experience_level,
-          has_boat: profile.has_boat,
-          boat_type: profile.boat_type,
-          boat_length: profile.boat_length,
-          boat_name: profile.boat_name,
-          favorite_species: profile.favorite_species,
-          profile_photo_url: profile.profile_photo_url,
-          preferred_fishing_times: profile.preferred_fishing_times,
-          fishing_type: fishingType,
-          updated_at: new Date().toISOString()
-        });
+      const { error } = await supabase.from('profiles').upsert({
+        id: session.user.id,
+        display_name: profile.display_name,
+        bio: profile.bio,
+        home_port: profile.home_port,
+        age: profile.age || null,
+        location: profile.location,
+        experience_level: profile.experience_level,
+        has_boat: profile.has_boat,
+        boat_type: profile.boat_type,
+        boat_length: profile.boat_length,
+        profile_photo_url: profile.profile_photo_url?.split('?')[0] || null,
+        fishing_type: fishingType,
+        updated_at: new Date().toISOString()
+      });
 
       if (error) {
-        console.error('❌ Save error:', error);
-        Alert.alert('Error', 'Failed to save profile: ' + error.message);
+        Alert.alert('Error', error.message);
         return;
       }
-
-      console.log('✅ Profile saved successfully');
-      Alert.alert('Success!', 'Your profile has been saved');
+      
       setSettingsOpen(false);
-    } catch (error) {
-      console.error('💥 Save profile error:', error);
-      Alert.alert('Error', 'Something went wrong while saving');
+      Alert.alert('Success', 'Profile saved!');
+    } catch (error: any) {
+      Alert.alert('Error', 'Save failed: ' + error.message);
     } finally {
       setSaving(false);
     }
@@ -470,91 +375,46 @@ export default function ProfileScreen() {
 
   async function signInWithApple() {
     try {
-      setAuthError(null);
       setLoading(true);
       const redirectTo = Linking.createURL('/');
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
-        options: {
-          redirectTo,
-          scopes: 'name email',
-        },
+        options: { redirectTo, scopes: 'name email' },
       });
-      if (error) {
-        console.error('Apple sign-in error:', error);
-        Alert.alert('Error', error.message);
-      }
+      if (error) Alert.alert('Error', error.message);
     } catch (error) {
-      console.error('Unexpected Apple sign-in error:', error);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      Alert.alert('Error', 'Sign in failed');
     } finally {
       setLoading(false);
     }
   }
 
   async function signInAnonymously() {
-    console.log('🔐 Anonymous sign in process started');
-    
     try {
-      setAuthError(null);
       setLoading(true);
-      
-      const { data, error } = await supabase.auth.signInAnonymously();
-      
-      if (error) {
-        console.error('❌ Anonymous sign in error:', error);
-        setAuthError(error.message);
-        Alert.alert('Error', error.message);
-      } else {
-        console.log('✅ Anonymous sign in successful');
-        console.log('👤 User ID:', data.user?.id);
-      }
+      const { error } = await supabase.auth.signInAnonymously();
+      if (error) Alert.alert('Error', error.message);
     } catch (error) {
-      console.error('💥 Unexpected anonymous sign in error:', error);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      Alert.alert('Error', 'Sign in failed');
     } finally {
       setLoading(false);
     }
   }
 
   async function signOut() {
-    console.log('🚪 Sign out process started');
-    
-    try {
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        console.error('❌ Sign out error:', error);
-        Alert.alert('Error', error.message);
-      } else {
-        console.log('✅ Signed out successfully');
-      }
-    } catch (error) {
-      console.error('💥 Unexpected sign out error:', error);
-      Alert.alert('Error', 'Something went wrong while signing out');
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      Alert.alert('Error', error.message);
+      return;
     }
+    router.replace('/');
+  } catch (error) {
+    Alert.alert('Error', 'Sign out failed');
   }
-
-  function toggleTackle(tackle: string) {
-    const current = profile.tackle_categories;
-    const updated = current.includes(tackle)
-      ? current.filter(t => t !== tackle)
-      : [...current, tackle];
-    
-    setProfile(prev => ({ ...prev, tackle_categories: updated }));
-  }
-
-  function toggleSpecies(speciesName: string) {
-    const current = profile.favorite_species;
-    const updated = current.includes(speciesName)
-      ? current.filter(s => s !== speciesName)
-      : [...current, speciesName];
-    
-    setProfile(prev => ({ ...prev, favorite_species: updated }));
-  }
+}
 
   if (loading) {
-    console.log('⏳ Rendering loading state');
     return (
       <View style={[styles.container, styles.centered]}>
         <Text style={styles.loadingText}>Loading...</Text>
@@ -563,7 +423,6 @@ export default function ProfileScreen() {
   }
 
   if (!isSignedIn) {
-    console.log('🔓 Rendering sign-in state');
     return (
       <View style={[styles.container, styles.centered, { paddingTop: insets.top + 20 }]}>
         <View style={styles.logoBox}>
@@ -574,11 +433,7 @@ export default function ProfileScreen() {
           Create your {fishingType} fishing profile and connect with other anglers instantly!
         </Text>
         
-        {authError && (
-          <Text style={styles.errorText}>
-            Error: {authError}
-          </Text>
-        )}
+        {authError && <Text style={styles.errorText}>Error: {authError}</Text>}
         
         {Platform.OS === 'ios' && (
           <Pressable style={[styles.signInButton, { marginBottom: 12 }]} onPress={signInWithApple}>
@@ -593,7 +448,6 @@ export default function ProfileScreen() {
     );
   }
 
-  console.log('✅ Rendering signed-in profile state');
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView contentContainerStyle={[styles.profileContent, { paddingBottom: insets.bottom + 20 }]}>
@@ -611,36 +465,26 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
 
-        {/* PROFILE PHOTO SECTION */}
         <View style={styles.photoSection}>
           <Pressable onPress={pickImage} disabled={uploadingPhoto}>
-            {profile.profile_photo_url ? (
-              <Image 
-                source={{ uri: profile.profile_photo_url }} 
-                style={styles.profilePhoto}
-              />
-            ) : (
-              <View style={styles.profilePhotoPlaceholder}>
-                <Text style={styles.photoPlaceholderText}>
-                  {profile.display_name ? profile.display_name.charAt(0).toUpperCase() : '?'}
-                </Text>
-              </View>
-            )}
-            <View style={styles.photoEditBadge}>
-              <Text style={styles.photoEditText}>
-                {uploadingPhoto ? '...' : '📷'}
-              </Text>
-            </View>
+{profile.profile_photo_url ? (
+  <Image 
+    source={{ uri: profile.profile_photo_url }} 
+    style={styles.profilePhoto}
+    onError={(e) => console.log('🖼️ Image load error:', e.nativeEvent.error)}
+    onLoad={() => console.log('🖼️ Image loaded successfully')}
+  />
+) : (
+  <View style={styles.profilePhotoPlaceholder}>
+    <Text style={styles.photoPlaceholderText}>
+      {profile.display_name ? profile.display_name.charAt(0).toUpperCase() : '+'}
+    </Text>
+  </View>
+)}
           </Pressable>
           <View style={styles.photoButtons}>
-            <Pressable 
-              style={styles.changePhotoButton} 
-              onPress={pickImage}
-              disabled={uploadingPhoto}
-            >
-              <Text style={styles.changePhotoText}>
-                {uploadingPhoto ? 'UPLOADING...' : 'CHANGE PHOTO'}
-              </Text>
+            <Pressable style={styles.changePhotoButton} onPress={pickImage} disabled={uploadingPhoto}>
+              <Text style={styles.changePhotoText}>{uploadingPhoto ? 'UPLOADING...' : 'CHANGE PHOTO'}</Text>
             </Pressable>
             {profile.profile_photo_url ? (
               <Pressable style={styles.removePhotoButton} onPress={removePhoto}>
@@ -681,64 +525,19 @@ export default function ProfileScreen() {
         </View>
 
         {profile.has_boat && (
-          <>
-            <View style={styles.profileSection}>
-              <Text style={styles.profileLabel}>BOAT DETAILS</Text>
-              <Text style={styles.profileValue}>
-                {profile.boat_name || 'Unnamed'} • {profile.boat_type || 'Type not set'} • {profile.boat_length || 'Length not set'}
-              </Text>
-            </View>
-          </>
+          <View style={styles.profileSection}>
+            <Text style={styles.profileLabel}>BOAT DETAILS</Text>
+            <Text style={styles.profileValue}>
+              {profile.boat_type || 'Type not set'} • {profile.boat_length || 'Length not set'}
+            </Text>
+          </View>
         )}
-
-        <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>FAVORITE SPECIES</Text>
-          <View style={styles.tackleList}>
-            {profile.favorite_species.length > 0 ? 
-              profile.favorite_species.map(s => (
-                <View key={s} style={styles.tackleChip}>
-                  <Text style={styles.tackleChipText}>{s}</Text>
-                </View>
-              )) : 
-              <Text style={styles.profileValue}>None selected</Text>
-            }
-          </View>
-        </View>
-
-        <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>PREFERRED FISHING TIMES</Text>
-          <View style={styles.tackleList}>
-            {profile.preferred_fishing_times.length > 0 ? 
-              profile.preferred_fishing_times.map(time => (
-                <View key={time} style={styles.tackleChip}>
-                  <Text style={styles.tackleChipText}>{time}</Text>
-                </View>
-              )) : 
-              <Text style={styles.profileValue}>None selected</Text>
-            }
-          </View>
-        </View>
-
-        <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>TACKLE CATEGORIES</Text>
-          <View style={styles.tackleList}>
-            {profile.tackle_categories.length > 0 ? 
-              profile.tackle_categories.map(t => (
-                <View key={t} style={styles.tackleChip}>
-                  <Text style={styles.tackleChipText}>{t}</Text>
-                </View>
-              )) : 
-              <Text style={styles.profileValue}>None selected</Text>
-            }
-          </View>
-        </View>
 
         <Pressable style={styles.editButton} onPress={() => setSettingsOpen(true)}>
           <Text style={styles.editButtonText}>EDIT PROFILE</Text>
         </Pressable>
       </ScrollView>
 
-      {/* Settings Modal */}
       <Modal visible={settingsOpen} transparent animationType="slide" onRequestClose={() => setSettingsOpen(false)}>
         <View style={styles.settingsBackdrop}>
           <View style={styles.settingsCard}>
@@ -748,26 +547,18 @@ export default function ProfileScreen() {
             </View>
             
             <ScrollView contentContainerStyle={styles.settingsContent}>
-              {/* Photo upload in modal too */}
               <Text style={styles.label}>PROFILE PHOTO</Text>
               <View style={styles.modalPhotoSection}>
                 <Pressable onPress={pickImage} disabled={uploadingPhoto}>
                   {profile.profile_photo_url ? (
-                    <Image 
-                      source={{ uri: profile.profile_photo_url }} 
-                      style={styles.modalProfilePhoto}
-                    />
+                    <Image source={{ uri: profile.profile_photo_url }} style={styles.modalProfilePhoto} />
                   ) : (
                     <View style={styles.modalProfilePhotoPlaceholder}>
                       <Text style={styles.modalPhotoPlaceholderText}>+</Text>
                     </View>
                   )}
                 </Pressable>
-                <Pressable 
-                  style={styles.modalChangePhotoButton} 
-                  onPress={pickImage}
-                  disabled={uploadingPhoto}
-                >
+                <Pressable style={styles.modalChangePhotoButton} onPress={pickImage} disabled={uploadingPhoto}>
                   <Text style={styles.modalChangePhotoText}>
                     {uploadingPhoto ? 'UPLOADING...' : profile.profile_photo_url ? 'CHANGE' : 'ADD PHOTO'}
                   </Text>
@@ -837,34 +628,6 @@ export default function ProfileScreen() {
                 })}
               </View>
 
-              <Text style={styles.label}>FAVORITE SPECIES</Text>
-              <View style={styles.chipsWrap}>
-                {species.map(s => {
-                  const active = profile.favorite_species.includes(s);
-                  return (
-                    <Pressable 
-                      key={s} 
-                      onPress={() => toggleSpecies(s)} 
-                      style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}
-                    >
-                      <Text style={active ? styles.chipTextActive : styles.chipTextIdle}>{s}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <Text style={styles.label}>TACKLE CATEGORIES</Text>
-              <View style={styles.chipsWrap}>
-                {tackleCategories.map(t => {
-                  const active = profile.tackle_categories.includes(t);
-                  return (
-                    <Pressable key={t} onPress={() => toggleTackle(t)} style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}>
-                      <Text style={active ? styles.chipTextActive : styles.chipTextIdle}>{t}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
               <Text style={styles.label}>HAS BOAT</Text>
               <Pressable 
                 onPress={() => setProfile(p => ({ ...p, has_boat: !p.has_boat }))}
@@ -875,86 +638,51 @@ export default function ProfileScreen() {
                 </Text>
               </Pressable>
 
-              {profile.has_boat && (
-                <>
-                  <Text style={styles.label}>BOAT NAME</Text>
-                  <TextInput
-                    placeholder="e.g., Sea Hunter, Miss Sarah"
-                    placeholderTextColor={FishingTheme.colors.text.muted}
-                    value={profile.boat_name}
-                    onChangeText={(v) => setProfile(p => ({ ...p, boat_name: v }))}
-                    style={styles.input}
-                  />
-
-                  <Text style={styles.label}>BOAT TYPE</Text>
-                  <View style={styles.chipsWrap}>
-                    {(fishingType === 'freshwater' 
-                      ? ['Bass Boat', 'Jon Boat', 'Pontoon', 'Kayak', 'Canoe', 'Other']
-                      : ['Center Console', 'Sportfisher', 'Bay Boat', 'Flats Boat', 'Charter Boat', 'Other']
-                    ).map(type => {
-                      const active = profile.boat_type === type;
-                      return (
-                        <Pressable 
-                          key={type} 
-                          onPress={() => setProfile(p => ({ ...p, boat_type: type }))} 
-                          style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}
-                        >
-                          <Text style={active ? styles.chipTextActive : styles.chipTextIdle}>{type}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-
-                  <Text style={styles.label}>BOAT LENGTH</Text>
-                  <View style={styles.chipsWrap}>
-                    {['Under 20ft', '20-25ft', '26-30ft', '31-35ft', '36-40ft', '40ft+'].map(length => {
-                      const active = profile.boat_length === length;
-                      return (
-                        <Pressable 
-                          key={length} 
-                          onPress={() => setProfile(p => ({ ...p, boat_length: length }))} 
-                          style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}
-                        >
-                          <Text style={active ? styles.chipTextActive : styles.chipTextIdle}>{length}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </>
-              )}
-
-              <Text style={styles.label}>PREFERRED FISHING TIMES</Text>
+              <Text style={styles.label}>BOAT TYPE</Text>
               <View style={styles.chipsWrap}>
-                {['Early Morning', 'Morning', 'Afternoon', 'Evening', 'Night', 'Dawn', 'Dusk', 'Weekends Only'].map(time => {
-                  const active = profile.preferred_fishing_times.includes(time);
+                {(fishingType === 'freshwater' 
+                  ? ['Bass Boat', 'Jon Boat', 'Pontoon', 'Kayak', 'Canoe', 'Other']
+                  : ['Center Console', 'Sportfisher', 'Bay Boat', 'Flats Boat', 'Charter Boat', 'Other']
+                ).map(type => {
+                  const active = profile.boat_type === type;
                   return (
                     <Pressable 
-                      key={time} 
-                      onPress={() => {
-                        const current = profile.preferred_fishing_times;
-                        const updated = active 
-                          ? current.filter(t => t !== time)
-                          : [...current, time];
-                        setProfile(p => ({ ...p, preferred_fishing_times: updated }));
-                      }} 
+                      key={type} 
+                      onPress={() => setProfile(p => ({ ...p, boat_type: type }))} 
                       style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}
                     >
-                      <Text style={active ? styles.chipTextActive : styles.chipTextIdle}>{time}</Text>
+                      <Text style={active ? styles.chipTextActive : styles.chipTextIdle}>{type}</Text>
                     </Pressable>
                   );
                 })}
               </View>
-            </ScrollView>
 
-            <View style={styles.settingsFooter}>
-              <Pressable 
-                onPress={saveProfile} 
-                style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
-                disabled={saving}
-              >
-                <Text style={styles.saveBtnText}>{saving ? 'SAVING...' : 'SAVE PROFILE'}</Text>
-              </Pressable>
-            </View>
+              <Text style={styles.label}>BOAT LENGTH</Text>
+              <View style={styles.chipsWrap}>
+                {['Under 20ft', '20-25ft', '26-30ft', '31-35ft', '36-40ft', '40ft+'].map(length => {
+                  const active = profile.boat_length === length;
+                  return (
+                    <Pressable 
+                      key={length} 
+                      onPress={() => setProfile(p => ({ ...p, boat_length: length }))} 
+                      style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}
+                    >
+                      <Text style={active ? styles.chipTextActive : styles.chipTextIdle}>{length}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <View style={styles.settingsFooter}>
+                <Pressable 
+                  onPress={saveProfile} 
+                  style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+                  disabled={saving}
+                >
+                  <Text style={styles.saveBtnText}>{saving ? 'SAVING...' : 'SAVE PROFILE'}</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1010,7 +738,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // Photo section styles
   photoSection: {
     alignItems: 'center',
     marginBottom: 10,
@@ -1036,22 +763,6 @@ const styles = StyleSheet.create({
     fontSize: 48,
     fontWeight: '800',
     color: FishingTheme.colors.cream,
-  },
-  photoEditBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: FishingTheme.colors.darkGreen,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.cream,
-  },
-  photoEditText: {
-    fontSize: 16,
   },
   photoButtons: {
     flexDirection: 'row',
@@ -1087,7 +798,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // Modal photo styles
   modalPhotoSection: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1139,21 +849,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   profileValue: { fontSize: 16, color: FishingTheme.colors.text.primary, fontWeight: '500' },
-  tackleList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tackleChip: { 
-    backgroundColor: FishingTheme.colors.darkGreen, 
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.forestGreen,
-  },
-  tackleChipText: { 
-    fontSize: 12, 
-    color: FishingTheme.colors.cream, 
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
   
   loadingText: { color: FishingTheme.colors.text.primary, fontSize: 16 },
   signInText: { 
@@ -1216,7 +911,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   
-  // Settings modal
   settingsBackdrop: { 
     flex: 1, 
     backgroundColor: FishingTheme.colors.overlay, 
