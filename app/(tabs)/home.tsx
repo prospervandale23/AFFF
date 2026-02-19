@@ -108,7 +108,7 @@ export default function HomeScreen() {
 
       for (const { product, key } of products) {
         try {
-          const url = `${baseUrl}?date=latest&station=${stationId}&product=${product}&units=metric&time_zone=gmt&application=fishing_buddy&format=json`;
+          const url = `${baseUrl}?date=latest&station=${stationId}&product=${product}&units=metric&time_zone=gmt&application=catch_connect&format=json`;
           
           const response = await fetch(url);
           
@@ -130,7 +130,7 @@ export default function HomeScreen() {
                   setWindData({
                     speed: Math.round(speedMph),
                     direction: parseFloat(latest.d),
-                    gust: Math.round(speedMph * 1.3),
+                    gust: latest.g ? Math.round(parseFloat(latest.g) * 2.237) : undefined,
                   });
                 }
               }
@@ -172,24 +172,10 @@ export default function HomeScreen() {
     try {
       setConditionsLoading(true);
 
-      setWindData({
-        speed: Math.floor(Math.random() * 15) + 5,
-        direction: Math.floor(Math.random() * 360),
-        gust: Math.floor(Math.random() * 10) + 15,
-      });
+      // Fetch real tide predictions from NOAA CO-OPS
+      await loadTidePredictions(buoy.id);
 
-      const now = new Date();
-      const mockTides: TideData[] = [];
-      for (let i = 0; i < 4; i++) {
-        const tideTime = new Date(now.getTime() + i * 6 * 60 * 60 * 1000);
-        mockTides.push({
-          time: tideTime.toISOString(),
-          height: Math.random() * 4 + 1,
-          type: i % 2 === 0 ? 'high' : 'low',
-        });
-      }
-      setTideData(mockTides);
-
+      // Calculate moon phase
       const moonPhaseData = calculateMoonPhase();
       setMoonPhase(moonPhaseData);
     } catch (error) {
@@ -197,6 +183,70 @@ export default function HomeScreen() {
     } finally {
       setConditionsLoading(false);
     }
+  }
+
+  async function loadTidePredictions(stationId: string) {
+    try {
+      const now = new Date();
+      const beginDate = formatNoaaDate(now);
+      // Fetch 48 hours of predictions to ensure we get enough high/low events
+      const endDate = formatNoaaDate(new Date(now.getTime() + 48 * 60 * 60 * 1000));
+
+      const url =
+        `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter` +
+        `?begin_date=${beginDate}&end_date=${endDate}` +
+        `&station=${stationId}` +
+        `&product=predictions` +
+        `&datum=MLLW` +
+        `&interval=hilo` +
+        `&units=english` +
+        `&time_zone=lst_ldt` +
+        `&application=catch_connect` +
+        `&format=json`;
+
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        console.warn('Tide predictions response not OK:', response.status);
+        return;
+      }
+
+      const data = await response.json();
+
+      if (data.predictions && data.predictions.length > 0) {
+        // Filter to only upcoming tide events (from now onward)
+        const upcoming = data.predictions
+          .map((p: { t: string; v: string; type: string }) => ({
+            time: parseNoaaLocalTime(p.t),
+            height: parseFloat(p.v),
+            type: p.type === 'H' ? 'high' as const : 'low' as const,
+          }))
+          .filter((t: TideData) => new Date(t.time) >= now);
+
+        if (!mounted.current) return;
+        setTideData(upcoming.slice(0, 6));
+      } else if (data.error) {
+        console.warn('NOAA tide error:', data.error.message);
+      }
+    } catch (error) {
+      console.warn('Failed to fetch tide predictions:', error);
+    }
+  }
+
+  /** Format a Date as NOAA's expected yyyyMMdd HH:mm */
+  function formatNoaaDate(date: Date): string {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const h = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    return `${y}${m}${d} ${h}:${min}`;
+  }
+
+  /** Parse NOAA's local time string "YYYY-MM-DD HH:MM" into an ISO string */
+  function parseNoaaLocalTime(noaaTime: string): string {
+    // NOAA returns "2026-02-15 14:32" in local station time
+    return new Date(noaaTime.replace(' ', 'T')).toISOString();
   }
 
   function calculateMoonPhase(): MoonPhase {
@@ -329,26 +379,9 @@ export default function HomeScreen() {
   return (
     <View style={styles.screen}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 5 }]}>
         <View style={styles.headerContent}>
-          <View style={styles.titleContainer}>
-            <Text style={styles.appSubtitle}>Marine Conditions</Text>
-          </View>
           <View style={styles.headerButtons}>
-            <Pressable 
-              style={styles.tempToggle} 
-              onPress={() => setTempUnit(prev => prev === 'C' ? 'F' : 'C')}
-            >
-              <Text style={styles.tempToggleText}>°{tempUnit}</Text>
-            </Pressable>
-            <Pressable 
-              style={styles.fishingTypeToggle} 
-              onPress={toggleFishingType}
-            >
-              <Text style={styles.fishingTypeText}>
-                {fishingType === 'freshwater' ? '🏞️ FRESH' : '🌊 SALT'}
-              </Text>
-            </Pressable>
             <Pressable style={styles.buoyButton} onPress={() => setPickerOpen(true)}>
               <View style={styles.buoyDot} />
               <View>
@@ -356,10 +389,25 @@ export default function HomeScreen() {
                 <Text style={styles.buoyId}>Station {buoy.id}</Text>
               </View>
             </Pressable>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable 
+                style={styles.tempToggle} 
+                onPress={() => setTempUnit(prev => prev === 'C' ? 'F' : 'C')}
+              >
+                <Text style={styles.tempToggleText}>°{tempUnit}</Text>
+              </Pressable>
+              <Pressable 
+                style={styles.fishingTypeToggle} 
+                onPress={toggleFishingType}
+              >
+                <Text style={styles.fishingTypeText}>
+                  {fishingType === 'freshwater' ? '🏞️ FRESH' : '🌊 SALT'}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </View>
-
       <ScrollView 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
@@ -623,11 +671,7 @@ const styles = StyleSheet.create({
   titleContainer: {
     flex: 1,
   },
-  headerButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-  },
+ headerButtons: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flex: 1 },
   tempToggle: {
     backgroundColor: FishingTheme.colors.darkGreen,
     borderRadius: FishingTheme.borderRadius.md,

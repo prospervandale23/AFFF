@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
@@ -30,9 +31,44 @@ export default function WelcomeScreen() {
   });
 
   useEffect(() => {
-    checkExistingUser();
+    checkAgeAndSession();
     checkAppleAuth();
   }, []);
+
+  async function checkAgeAndSession() {
+    try {
+      // Check if user was previously denied
+      const denied = await AsyncStorage.getItem('age_gate_denied');
+      if (denied === 'true') {
+        router.replace('/age-gate');
+        return;
+      }
+
+      // Check if age has been verified
+      const ageVerified = await AsyncStorage.getItem('age_verified');
+      if (ageVerified !== 'true') {
+        router.replace('/age-gate');
+        return;
+      }
+
+      // Check for existing session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // Make sure they're not an anonymous user (legacy)
+        const isAnon = session.user?.app_metadata?.provider === 'anonymous';
+        if (isAnon) {
+          await supabase.auth.signOut();
+        } else {
+          router.replace('/(tabs)/home');
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Error checking age/session:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function checkAppleAuth() {
     try {
@@ -41,17 +77,6 @@ export default function WelcomeScreen() {
     } catch (error) {
       console.error('Error checking Apple auth:', error);
       setAppleAuthAvailable(false);
-    }
-  }
-
-  async function checkExistingUser() {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) router.replace('/(tabs)/home');
-    } catch (error) {
-      console.error('Error checking user:', error);
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -99,20 +124,11 @@ export default function WelcomeScreen() {
     }
   }
 
-  const handleEmailSignIn = () => {
-    router.push('//auth/email-signin'); 
-  };
-
-  const handleTermsClick = () => {
-    router.push('/terms');
-  };
-
   async function signInWithApple() {
     try {
       setSigningIn(true);
       setErrorMessage('');
       
-      // Generate a secure nonce for Apple Sign In
       const rawNonce = Crypto.randomUUID();
       const hashedNonce = await Crypto.digestStringAsync(
         Crypto.CryptoDigestAlgorithm.SHA256,
@@ -126,7 +142,7 @@ export default function WelcomeScreen() {
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
         ],
-        nonce: hashedNonce, // Pass HASHED nonce to Apple
+        nonce: hashedNonce,
       });
 
       console.log('🍎 Apple credential received:');
@@ -136,7 +152,7 @@ export default function WelcomeScreen() {
       const { data, error } = await supabase.auth.signInWithIdToken({
         provider: 'apple',
         token: credential.identityToken!,
-        nonce: rawNonce, // Pass RAW nonce to Supabase
+        nonce: rawNonce,
       });
 
       console.log('🔐 Supabase auth result:');
@@ -159,26 +175,6 @@ export default function WelcomeScreen() {
         console.error('🍎 Apple Sign In Error:', error);
         setErrorMessage(`Apple Error: ${error.message}`);
       }
-    } finally {
-      setSigningIn(false);
-    }
-  }
-
-  async function signInAnonymously() {
-    try {
-      setSigningIn(true);
-      setErrorMessage('');
-      
-      const { data, error } = await supabase.auth.signInAnonymously();
-      if (error) throw error;
-
-      if (data.user) {
-        await ensureProfileExists(data.user.id, 'Guest Angler');
-      }
-
-      router.replace('/(tabs)/home');
-    } catch (error: any) {
-      setErrorMessage(`Error: ${error.message}`);
     } finally {
       setSigningIn(false);
     }
@@ -228,26 +224,24 @@ export default function WelcomeScreen() {
             )}
 
             <Pressable 
-              style={styles.emailButton}
-              onPress={handleEmailSignIn}
+              style={styles.signInButton}
+              onPress={() => router.push('/auth/email-signin')}
               disabled={signingIn}
             >
-              <Text style={styles.emailButtonText}>SIGN IN WITH EMAIL</Text>
+              <Text style={styles.signInButtonText}>SIGN IN</Text>
             </Pressable>
 
             <Pressable 
-              style={styles.guestButton}
-              onPress={signInAnonymously}
+              style={styles.createButton}
+              onPress={() => router.push('/auth/create-account')}
               disabled={signingIn}
             >
-              <Text style={styles.guestButtonText}>
-                {signingIn ? 'SIGNING IN...' : 'CONTINUE AS GUEST'}
-              </Text>
+              <Text style={styles.createButtonText}>CREATE ACCOUNT</Text>
             </Pressable>
 
             <Text style={styles.disclaimer}>
               By registering for this app you agree to our{' '}
-              <Text style={styles.linkText} onPress={handleTermsClick}>
+              <Text style={styles.linkText} onPress={() => router.push('/terms')}>
                 terms and conditions
               </Text>.
             </Text>
@@ -267,14 +261,39 @@ const styles = StyleSheet.create({
   content: { flex: 1, justifyContent: 'center', padding: 20 },
   header: { alignItems: 'center', marginBottom: 60 },
   title: { fontSize: 48, fontWeight: '800', color: '#FFFFFF', marginBottom: 8, letterSpacing: 2 },
-  subtitle: { fontSize: 20, fontWeight: '600', color: '#FFFFFF', marginBottom: 8, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 6 },
   tagline: { fontSize: 16, color: 'rgba(255,255,255,0.9)', textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 6 },
   authContainer: { gap: 16, alignItems: 'center' },
   appleButton: { width: '100%', maxWidth: 320, height: 50 },
-  emailButton: { width: '100%', maxWidth: 320, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 14, alignItems: 'center' },
-  emailButtonText: { fontSize: 16, fontWeight: '800', color: '#000000', letterSpacing: 0.5 },
-  guestButton: { width: '100%', maxWidth: 320, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.25)' },
-  guestButtonText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', letterSpacing: 0.5 },
+  signInButton: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+  },
+  signInButtonText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#000000',
+    letterSpacing: 0.5,
+  },
+  createButton: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center',
+  },
+  createButtonText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
   disclaimer: { fontSize: 13, color: 'rgba(255,255,255,0.7)', textAlign: 'center', marginTop: 8, maxWidth: 280 },
   linkText: { color: '#FFFFFF', textDecorationLine: 'underline', fontWeight: 'bold' },
   errorBox: { width: '100%', maxWidth: 320, backgroundColor: 'rgba(255,59,48,0.2)', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: 'rgba(255,59,48,0.5)', marginBottom: 16 },

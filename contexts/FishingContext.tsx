@@ -1,13 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
 
 type FishingType = 'freshwater' | 'saltwater' | null;
 
 interface FishingContextType {
   fishingType: FishingType;
   setFishingType: (type: FishingType) => Promise<void>;
-  species: string[]; // This was missing in the implementation
-  tackleCategories: string[]; // This was missing in the implementation
+  species: string[];
+  tackleCategories: string[];
 }
 
 const FishingContext = createContext<FishingContextType | undefined>(undefined);
@@ -36,6 +37,15 @@ export function FishingProvider({ children }: { children: React.ReactNode }) {
       await AsyncStorage.setItem('fishingType', type);
     }
     setFishingTypeState(type);
+
+    // Sync to Supabase so other users see the correct fishing type
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user && type) {
+      await supabase
+        .from('profiles')
+        .update({ fishing_type: type })
+        .eq('id', session.user.id);
+    }
   }
 
   // --- Logic to determine which lists to show ---
@@ -43,7 +53,6 @@ export function FishingProvider({ children }: { children: React.ReactNode }) {
   const tackleCategories = fishingType === 'saltwater' ? SALTWATER_TACKLE : FRESHWATER_TACKLE;
 
   return (
-    // Now these variables exist and can be passed into the provider!
     <FishingContext.Provider value={{ fishingType, setFishingType, species, tackleCategories }}>
       {children}
     </FishingContext.Provider>

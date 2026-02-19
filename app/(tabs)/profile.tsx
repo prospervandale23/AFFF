@@ -1,11 +1,13 @@
 import { useFishing } from '@/contexts/FishingContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActionSheetIOS,
+  ActivityIndicator,
   Alert,
+  FlatList,
   Image,
   Modal,
   Platform,
@@ -19,6 +21,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CloseButton } from '../../components/Closebutton';
 import { FishingTheme } from '../../constants/FishingTheme';
+import { BlockedUserInfo, getBlockedUsers, unblockUser } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 
 interface SimpleProfile {
@@ -55,11 +58,15 @@ export default function ProfileScreen() {
   });
   
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [blockedModalOpen, setBlockedModalOpen] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUserInfo[]>([]);
+  const [loadingBlocked, setLoadingBlocked] = useState(false);
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     initializeAuth();
@@ -123,42 +130,42 @@ export default function ProfileScreen() {
     };
   }
 
-async function loadProfile(userId: string) {
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+  async function loadProfile(userId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-    if (error && error.code !== 'PGRST116') {
-      return;
-    }
+      if (error && error.code !== 'PGRST116') {
+        return;
+      }
 
-    if (data) {
-      // Add cache-busting for profile photo
-      const photoUrl = data.profile_photo_url 
-        ? `${data.profile_photo_url}?t=${Date.now()}` 
-        : '';
-      
-      setProfile({
-        display_name: data.display_name || '',
-        bio: data.bio || '',
-        home_port: data.home_port || '',
-        age: data.age?.toString() || '',
-        location: data.location || '',
-        experience_level: data.experience_level,
-        has_boat: data.has_boat || false,
-        boat_type: data.boat_type || '',
-        boat_length: data.boat_length || '',
-        profile_photo_url: photoUrl,
-        fishing_type: data.fishing_type || fishingType
-      });
+      if (data) {
+        // Add cache-busting for profile photo
+        const photoUrl = data.profile_photo_url 
+          ? `${data.profile_photo_url}?t=${Date.now()}` 
+          : '';
+        
+        setProfile({
+          display_name: data.display_name || '',
+          bio: data.bio || '',
+          home_port: data.home_port || '',
+          age: data.age?.toString() || '',
+          location: data.location || '',
+          experience_level: data.experience_level,
+          has_boat: data.has_boat || false,
+          boat_type: data.boat_type || '',
+          boat_length: data.boat_length || '',
+          profile_photo_url: photoUrl,
+          fishing_type: data.fishing_type || fishingType
+        });
+      }
+    } catch (error) {
+      console.error('Load profile error:', error);
     }
-  } catch (error) {
-    console.error('Load profile error:', error);
   }
-}
 
   function resetProfile() {
     setProfile({
@@ -176,6 +183,106 @@ async function loadProfile(userId: string) {
     });
   }
 
+  // --- Delete Account ---
+  async function handleDeleteAccount() {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account, profile, messages, and all associated data. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete My Account',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Are you absolutely sure?',
+              'All your data will be permanently deleted. You will need to create a new account to use Catch Connect again.',
+              [
+                { text: 'Go Back', style: 'cancel' },
+                {
+                  text: 'Yes, Delete Everything',
+                  style: 'destructive',
+                  onPress: executeDeleteAccount,
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  }
+
+  async function executeDeleteAccount() {
+    try {
+      setDeleting(true);
+
+      const { error } = await supabase.rpc('delete_user_account');
+
+      if (error) {
+        console.error('Delete account error:', error);
+        Alert.alert('Error', 'Failed to delete account: ' + error.message);
+        return;
+      }
+
+      // Clear local storage
+      await AsyncStorage.multiRemove(['age_verified', 'user_dob', 'age_gate_denied']);
+
+      // Sign out locally
+      await supabase.auth.signOut();
+
+      // Navigate to welcome screen
+      router.replace('/');
+    } catch (error: any) {
+      console.error('Delete account error:', error);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  // --- Blocked Users ---
+  async function openBlockedModal() {
+    setBlockedModalOpen(true);
+    setLoadingBlocked(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const blocked = await getBlockedUsers(session.user.id);
+        setBlockedUsers(blocked);
+      }
+    } catch (error) {
+      console.error('Error loading blocked users:', error);
+    } finally {
+      setLoadingBlocked(false);
+    }
+  }
+
+  async function handleUnblock(blockedId: string, displayName: string) {
+    Alert.alert(
+      'Unblock User',
+      `Are you sure you want to unblock ${displayName}? They will be able to appear in your feed and message you again.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unblock',
+          onPress: async () => {
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (!session?.user) return;
+              await unblockUser(session.user.id, blockedId);
+              // Remove from local state
+              setBlockedUsers(prev => prev.filter(u => u.blocked_id !== blockedId));
+            } catch (error) {
+              console.error('Unblock error:', error);
+              Alert.alert('Error', 'Could not unblock user. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  }
+
+  // --- Photo Functions ---
   async function pickImage() {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
@@ -230,73 +337,73 @@ async function loadProfile(userId: string) {
   }
 
   async function uploadPhoto(uri: string) {
-  try {
-    setUploadingPhoto(true);
-    
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) {
-      Alert.alert('Error', 'You must be signed in to upload a photo');
-      return;
+    try {
+      setUploadingPhoto(true);
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        Alert.alert('Error', 'You must be signed in to upload a photo');
+        return;
+      }
+
+      const userId = session.user.id;
+      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const filePath = `${userId}/profile.${fileExt}`;
+      
+      console.log('📸 Upload path:', filePath);
+      
+      // Fetch as arraybuffer instead of blob
+      const response = await fetch(uri);
+      const arrayBuffer = await response.arrayBuffer();
+      
+      console.log('📦 ArrayBuffer size:', arrayBuffer.byteLength);
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('profile-photos')
+        .upload(filePath, arrayBuffer, { 
+          contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
+          upsert: true 
+        });
+
+      if (uploadError) {
+        console.log('❌ Upload error:', uploadError);
+        throw uploadError;
+      }
+      
+      console.log('✅ Upload success:', uploadData);
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('profile-photos')
+        .getPublicUrl(filePath);
+
+      console.log('🔗 Public URL:', publicUrl);
+
+      const photoUrlWithTimestamp = `${publicUrl}?t=${Date.now()}`;
+
+      setProfile(prev => ({ ...prev, profile_photo_url: photoUrlWithTimestamp }));
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ 
+          profile_photo_url: publicUrl,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', userId);
+
+      if (updateError) {
+        console.log('❌ Profile update error:', updateError);
+        Alert.alert('Warning', 'Photo uploaded but profile update failed: ' + updateError.message);
+      } else {
+        console.log('✅ Profile updated with photo URL');
+      }
+
+    } catch (error: any) {
+      console.log('❌ Upload failed:', error);
+      Alert.alert('Upload Failed', error.message);
+    } finally {
+      setUploadingPhoto(false);
     }
-
-    const userId = session.user.id;
-    const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
-    const filePath = `${userId}/profile.${fileExt}`;
-    
-    console.log('📸 Upload path:', filePath);
-    
-    // Fetch as arraybuffer instead of blob
-    const response = await fetch(uri);
-    const arrayBuffer = await response.arrayBuffer();
-    
-    console.log('📦 ArrayBuffer size:', arrayBuffer.byteLength);
-
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('profile-photos')
-      .upload(filePath, arrayBuffer, { 
-        contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
-        upsert: true 
-      });
-
-    if (uploadError) {
-      console.log('❌ Upload error:', uploadError);
-      throw uploadError;
-    }
-    
-    console.log('✅ Upload success:', uploadData);
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('profile-photos')
-      .getPublicUrl(filePath);
-
-    console.log('🔗 Public URL:', publicUrl);
-
-    const photoUrlWithTimestamp = `${publicUrl}?t=${Date.now()}`;
-
-    setProfile(prev => ({ ...prev, profile_photo_url: photoUrlWithTimestamp }));
-
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ 
-        profile_photo_url: publicUrl,
-        updated_at: new Date().toISOString() 
-      })
-      .eq('id', userId);
-
-    if (updateError) {
-      console.log('❌ Profile update error:', updateError);
-      Alert.alert('Warning', 'Photo uploaded but profile update failed: ' + updateError.message);
-    } else {
-      console.log('✅ Profile updated with photo URL');
-    }
-
-  } catch (error: any) {
-    console.log('❌ Upload failed:', error);
-    Alert.alert('Upload Failed', error.message);
-  } finally {
-    setUploadingPhoto(false);
   }
-}
 
   async function removePhoto() {
     Alert.alert('Remove Photo', 'Are you sure?', [
@@ -373,46 +480,18 @@ async function loadProfile(userId: string) {
     }
   }
 
-  async function signInWithApple() {
-    try {
-      setLoading(true);
-      const redirectTo = Linking.createURL('/');
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: { redirectTo, scopes: 'name email' },
-      });
-      if (error) Alert.alert('Error', error.message);
-    } catch (error) {
-      Alert.alert('Error', 'Sign in failed');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function signInAnonymously() {
-    try {
-      setLoading(true);
-      const { error } = await supabase.auth.signInAnonymously();
-      if (error) Alert.alert('Error', error.message);
-    } catch (error) {
-      Alert.alert('Error', 'Sign in failed');
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function signOut() {
-  try {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      Alert.alert('Error', error.message);
-      return;
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        Alert.alert('Error', error.message);
+        return;
+      }
+      router.replace('/');
+    } catch (error) {
+      Alert.alert('Error', 'Sign out failed');
     }
-    router.replace('/');
-  } catch (error) {
-    Alert.alert('Error', 'Sign out failed');
   }
-}
 
   if (loading) {
     return (
@@ -430,19 +509,13 @@ async function loadProfile(userId: string) {
         </View>
         <Text style={styles.sectionTitle}>CATCH CONNECT</Text>
         <Text style={styles.signInText}>
-          Create your {fishingType} fishing profile and connect with other anglers instantly!
+          Sign in to view and manage your profile.
         </Text>
         
         {authError && <Text style={styles.errorText}>Error: {authError}</Text>}
         
-        {Platform.OS === 'ios' && (
-          <Pressable style={[styles.signInButton, { marginBottom: 12 }]} onPress={signInWithApple}>
-            <Text style={styles.signInButtonText}>CONTINUE WITH APPLE</Text>
-          </Pressable>
-        )}
-
-        <Pressable style={styles.signInButton} onPress={signInAnonymously}>
-          <Text style={styles.signInButtonText}>GET STARTED</Text>
+        <Pressable style={styles.signInButton} onPress={() => router.replace('/')}>
+          <Text style={styles.signInButtonText}>GO TO SIGN IN</Text>
         </Pressable>
       </View>
     );
@@ -467,20 +540,20 @@ async function loadProfile(userId: string) {
 
         <View style={styles.photoSection}>
           <Pressable onPress={pickImage} disabled={uploadingPhoto}>
-{profile.profile_photo_url ? (
-  <Image 
-    source={{ uri: profile.profile_photo_url }} 
-    style={styles.profilePhoto}
-    onError={(e) => console.log('🖼️ Image load error:', e.nativeEvent.error)}
-    onLoad={() => console.log('🖼️ Image loaded successfully')}
-  />
-) : (
-  <View style={styles.profilePhotoPlaceholder}>
-    <Text style={styles.photoPlaceholderText}>
-      {profile.display_name ? profile.display_name.charAt(0).toUpperCase() : '+'}
-    </Text>
-  </View>
-)}
+            {profile.profile_photo_url ? (
+              <Image 
+                source={{ uri: profile.profile_photo_url }} 
+                style={styles.profilePhoto}
+                onError={(e) => console.log('🖼️ Image load error:', e.nativeEvent.error)}
+                onLoad={() => console.log('🖼️ Image loaded successfully')}
+              />
+            ) : (
+              <View style={styles.profilePhotoPlaceholder}>
+                <Text style={styles.photoPlaceholderText}>
+                  {profile.display_name ? profile.display_name.charAt(0).toUpperCase() : '+'}
+                </Text>
+              </View>
+            )}
           </Pressable>
           <View style={styles.photoButtons}>
             <Pressable style={styles.changePhotoButton} onPress={pickImage} disabled={uploadingPhoto}>
@@ -536,8 +609,24 @@ async function loadProfile(userId: string) {
         <Pressable style={styles.editButton} onPress={() => setSettingsOpen(true)}>
           <Text style={styles.editButtonText}>EDIT PROFILE</Text>
         </Pressable>
+
+        <Pressable style={styles.blockedUsersButton} onPress={openBlockedModal}>
+          <Text style={styles.blockedUsersButtonText}>BLOCKED USERS</Text>
+        </Pressable>
+
+        {/* DELETE ACCOUNT */}
+        <Pressable 
+          style={styles.deleteAccountButton} 
+          onPress={handleDeleteAccount}
+          disabled={deleting}
+        >
+          <Text style={styles.deleteAccountText}>
+            {deleting ? 'DELETING...' : 'DELETE ACCOUNT'}
+          </Text>
+        </Pressable>
       </ScrollView>
 
+      {/* EDIT PROFILE MODAL */}
       <Modal visible={settingsOpen} transparent animationType="slide" onRequestClose={() => setSettingsOpen(false)}>
         <View style={styles.settingsBackdrop}>
           <View style={styles.settingsCard}>
@@ -683,6 +772,57 @@ async function loadProfile(userId: string) {
                 </Pressable>
               </View>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* BLOCKED USERS MODAL */}
+      <Modal visible={blockedModalOpen} transparent animationType="slide" onRequestClose={() => setBlockedModalOpen(false)}>
+        <View style={styles.settingsBackdrop}>
+          <View style={styles.blockedCard}>
+            <View style={styles.settingsHeader}>
+              <Text style={styles.settingsTitle}>BLOCKED USERS</Text>
+              <CloseButton onPress={() => setBlockedModalOpen(false)} iconName="chevron-down" />
+            </View>
+
+            {loadingBlocked ? (
+              <View style={styles.blockedLoading}>
+                <ActivityIndicator size="large" color={FishingTheme.colors.darkGreen} />
+              </View>
+            ) : blockedUsers.length === 0 ? (
+              <View style={styles.blockedEmpty}>
+                <Text style={styles.blockedEmptyText}>No blocked users</Text>
+                <Text style={styles.blockedEmptySubtext}>Users you block will appear here</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={blockedUsers}
+                keyExtractor={(item) => item.blocked_id}
+                contentContainerStyle={styles.blockedList}
+                renderItem={({ item }) => (
+                  <View style={styles.blockedRow}>
+                    <View style={styles.blockedUserInfo}>
+                      {item.profile_photo_url ? (
+                        <Image source={{ uri: item.profile_photo_url }} style={styles.blockedAvatar} />
+                      ) : (
+                        <View style={styles.blockedAvatarPlaceholder}>
+                          <Text style={styles.blockedAvatarInitial}>
+                            {(item.display_name || '?')[0].toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      <Text style={styles.blockedName}>{item.display_name || 'Unknown'}</Text>
+                    </View>
+                    <Pressable
+                      style={styles.unblockBtn}
+                      onPress={() => handleUnblock(item.blocked_id, item.display_name || 'this user')}
+                    >
+                      <Text style={styles.unblockBtnText}>UNBLOCK</Text>
+                    </Pressable>
+                  </View>
+                )}
+              />
+            )}
           </View>
         </View>
       </Modal>
@@ -907,6 +1047,125 @@ const styles = StyleSheet.create({
   },
   editButtonText: { 
     color: FishingTheme.colors.cream, 
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+
+  // Blocked Users Button
+  blockedUsersButton: {
+    backgroundColor: FishingTheme.colors.card,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    alignSelf: 'center',
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.border,
+  },
+  blockedUsersButtonText: {
+    color: FishingTheme.colors.text.secondary,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+
+  // Delete Account
+  deleteAccountButton: {
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    alignSelf: 'center',
+    borderWidth: 2,
+    borderColor: '#CC3333',
+    marginTop: 8,
+  },
+  deleteAccountText: {
+    color: '#CC3333',
+    fontWeight: '800',
+    fontSize: 13,
+    letterSpacing: 0.5,
+  },
+
+  // Blocked Users Modal
+  blockedCard: {
+    backgroundColor: FishingTheme.colors.cream,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.darkGreen,
+    maxHeight: '70%',
+  },
+  blockedLoading: {
+    padding: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  blockedEmpty: {
+    padding: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  blockedEmptyText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: FishingTheme.colors.darkGreen,
+  },
+  blockedEmptySubtext: {
+    fontSize: 13,
+    color: FishingTheme.colors.text.secondary,
+    marginTop: 8,
+  },
+  blockedList: {
+    padding: 16,
+  },
+  blockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: FishingTheme.colors.border,
+  },
+  blockedUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  blockedAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  blockedAvatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: FishingTheme.colors.sageGreen,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  blockedAvatarInitial: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  blockedName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: FishingTheme.colors.darkGreen,
+  },
+  unblockBtn: {
+    backgroundColor: FishingTheme.colors.card,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: FishingTheme.colors.darkGreen,
+  },
+  unblockBtnText: {
+    color: FishingTheme.colors.darkGreen,
+    fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.5,
   },

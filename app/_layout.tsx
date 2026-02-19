@@ -15,8 +15,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: false,
     shouldPlaySound: false,
     shouldSetBadge: true,
-    shouldShowBanner: false, // Required for TS
-    shouldShowList: false,   // Required for TS
+    shouldShowBanner: false,
+    shouldShowList: false,
   }),
 });
 
@@ -79,6 +79,7 @@ export default function RootLayout() {
       <FishingProvider>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
+          <Stack.Screen name="age-gate" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen 
             name="conversation/[id]" 
@@ -87,6 +88,8 @@ export default function RootLayout() {
               animation: 'slide_from_right',
             }}
           />
+          <Stack.Screen name="auth/email-signin" />
+          <Stack.Screen name="auth/create-account" />
           <Stack.Screen name="terms" />
         </Stack>
       </FishingProvider>

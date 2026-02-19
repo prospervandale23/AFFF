@@ -78,16 +78,17 @@ const TERMS_AND_CONDITIONS_TEXT = `
 By downloading or using the app, you agree to our Terms and Conditions outlined below.
 
 2. Account Registration
-You need to register for an account to access most features. By creating an account, you promise that all information you provide is true, accurate, and current.
+You need to register for an account to access the app. By verifying your age and creating an account, you confirm that you are over 16 years old and that the information you provide is accurate and complete. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account.
 
 3. Privacy Policy
-We care about data privacy and security. By using the app, you agree to be bound by our Privacy Policy.
+We care about data privacy and security. Catch Connect will not share your personal information with third parties without your consent, except as required by law should a criminal investigation or legal process which results from a users' actions demand it. By using the app, you agree to be bound by our Privacy Policy.
 
 4. User Generated Content
-Users may post photos of catches. You retain ownership of your content.
+Users may post photos of catches. Catch Connect will not share the emails, usernames, photos, or other personal informatino of any user with third parties without your consent. Catch Connect is not responsible for the recycling and or collection of user generated content by other users within the app. Use discretion with the information and photos you upload to your profile, and the messages you send to other users. 
 
 5. Safety Disclaimer
-Fishing involves physical activity and potential risks. You agree that you are voluntarily participating in these activities and assume all risk of injury.
+Fishing involves physical activity and potential risks; so does meeting in person with strangers. Catch Connect is not liable for any injuries or accidents that may occur while fishing or meeting in-person with other users, regardless of the circumstances. 
 
-[... Add the rest of your text here ...]
+6. Changes to Terms
+We reserve the right to modify these Terms and Conditions at any time. We will notify users of any changes by updating the Terms on this page.
 `;
