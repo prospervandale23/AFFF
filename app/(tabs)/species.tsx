@@ -126,7 +126,7 @@ const saltwaterSpecies: SpeciesInfo[] = [
     id: 'striped-bass',
     name: 'Striped Bass (Striper)',
     slotSize: 'Slot: 28"-31"',
-    description: 'Premier game fish of the Atlantic coast. Strong fighters that provide excellent table fare.',
+    description: 'Premier game fish of the Atlantic coast. Please release these beautiful beasts.',
     habitat: 'Coastal waters, estuaries, rocky shores, and structure',
     feedingTimes: ['Dawn', 'Dusk', 'Moving tides', 'Low light'],
     baitfish: ['Bunker', 'Herring', 'Eels', 'Sandworms'],
@@ -136,7 +136,7 @@ const saltwaterSpecies: SpeciesInfo[] = [
       {
         name: 'Hogy Heavy Minnow Jig',
         type: 'Jig',
-        priceRange: '$9-15',
+        priceRange: '$8-11',
         effectiveness: 'High',
         description: 'Small metal jig that imitates rainbait',
         tips: 'Fish near structure and vary retrieve speed.',
@@ -149,16 +149,16 @@ const saltwaterSpecies: SpeciesInfo[] = [
         effectiveness: 'High',
         description: 'Realistic baitfish imitation',
         tips: 'Use a steady retrieve with occasional twitches.',
-        comments: 'Effective in clear water and during warmer months.'
+        comments: 'Change the pattern to "match the hatch" and mimic local baitfish for best results.'
       },
       {
         name: 'Doc Spook',
         type: 'Surface Lure',
         priceRange: '$22-30',
         effectiveness: 'High',
-        description: 'Exciting surface action during feeding frenzies',
-        tips: 'Use during low light conditions over shallow structure for best results.',
-        comments: 'Great for early morning or late evening topwater action.'
+        description: 'Large topwater lure fished with a "walk the dog" action',
+        tips: 'Use during low light conditions over shallow structure. If you see fish swirling your lure that wont commit, work it harder!',
+        comments: 'Great for early morning, late evening, or overcast topwater action.'
       }
     ]
   },
@@ -176,25 +176,25 @@ const saltwaterSpecies: SpeciesInfo[] = [
       {
         name: 'Bucktail with Gulp',
         type: 'Jig Combo',
-        priceRange: '$5-10',
+        priceRange: '$5-8',
         effectiveness: 'High',
         description: 'Bucktail jig tipped with Gulp! soft bait',
         tips: 'Vary bucktail and gulp color',
         comments: 'Really targets fluke for some reason.'
       },
-      {
+     {
         name: 'Bucktail with Squid',
         type: 'Jig Combo',
-        priceRange: '$4-8',
+        priceRange: '$6-8',
         effectiveness: 'High',
         description: 'Bucktail jig tipped with strip of squid',
-        tips: 'Tip a pink or white bucktail with a whole squid head',
-        comments: 'A tried-and-true method for fluke fishing.'
+        tips: 'Tip a 1 oz or larger bucktail with a whole squid head to weed out the smaller fish',
+        comments: 'A great example of an "old-school" method that is still effective.'
       },
       {
         name: 'Hogy Sandeel Jig',
         type: 'Jig',
-        priceRange: '$8-15',
+        priceRange: '$8-11',
         effectiveness: 'High',
         description: 'Classic Hogy sandeel jig... It works!',
         tips: 'Jig in an area where the bottom is sandy and leave if Sea Robins start to bite.',
@@ -214,13 +214,22 @@ const saltwaterSpecies: SpeciesInfo[] = [
     bestTimes: 'Slack tide around rocky structure',
     lures: [
       {
-        name: 'Tautog Jig with half crab',
-        type: 'Jig Combo',
-        priceRange: '$5-10',
+        name: 'Hi-Lo Rig with crab',
+        type: 'Bait Rig',
+        priceRange: '$2-5',
         effectiveness: 'High',
-        description: 'A crab cut in half and put over the hook of a tautog jig',
-        tips: 'Vary jig color and weight based on current, depth, and water clarity',
-        comments: 'Use scissors to cut the crab in half, remove legs, and hook through the leg holes for best bait retention.'
+        description: 'Sinker tied below 1-3+ hooks tipped with crab',
+        tips: 'Try to get bait onto a sandy patch near the edge of a reef or by some pilings.',
+        comments: 'Tautog are excellent at stealing bait, set the hook immediately after you feel the first tap.'
+      },
+      {
+        name: 'Jig tipped with crab',
+        type: 'Jig Combo',
+        priceRange: '$3-7',
+        effectiveness: 'High',
+        description: 'Tautog style jig tipped with a crab',
+        tips: 'Use scissors to cut the crab in half, remove legs, and hook through the leg holes for best bait retention.',
+        comments: 'Vary jig color and weight based on current, depth, and water clarity'
       }
     ]
   },
@@ -228,7 +237,7 @@ const saltwaterSpecies: SpeciesInfo[] = [
     id: 'Scup',
     name: 'Porgy (Scup)',
     slotSize: '9" minimum',
-    description: 'Abundant fish easily targeted from shore.',
+    description: 'Abundant bottom fish easily targeted from shore.',
     habitat: 'Sandy bottoms, drop-offs, channels, and structure edges',
     feedingTimes: ['Moving tides', 'Early morning', 'Late afternoon'],
     baitfish: ['Sand Worms', 'Squid', 'Clams', 'Killifish'],
@@ -242,17 +251,8 @@ const saltwaterSpecies: SpeciesInfo[] = [
         effectiveness: 'High',
         description: 'Sinker tied below two j-hooks tipped with sandworms',
         tips: 'Try to get bait onto a sandy patch near the edge of a reef or by some pilings.',
-        comments: 'Scup have hard small mouths, so use smaller hooks and let them eat the bait.'
+        comments: 'Scup have hard small mouths, so use smaller hooks and let them nibble for a second before the hookset.'
       },
-      {
-        name: 'Bucktail with Squid',
-        type: 'Jig Combo',
-        priceRange: '$4-8',
-        effectiveness: 'High',
-        description: 'Bucktail jig tipped with strip of squid',
-        tips: 'Tip a pink or white bucktail with a whole squid head',
-        comments: 'A tried-and-true method for fluke fishing.'
-      }
     ]
   }
 ];

@@ -1,16 +1,16 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    SafeAreaView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    View
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 
@@ -21,49 +21,25 @@ export default function EmailSignInScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const isEmail = identifier.includes('@');
-
   async function handleSignIn() {
     setError('');
     const trimmed = identifier.trim();
 
     if (!trimmed || !password) {
-      setError('Please enter your email/username and password.');
+      setError('Please enter your email and password.');
       return;
     }
 
     setLoading(true);
 
     try {
-      let authEmail: string;
-
-      if (isEmail) {
-        authEmail = trimmed.toLowerCase();
-      } else {
-        // Look up the username to find the internal email
-        const { data: mapping, error: lookupError } = await supabase
-          .from('user_identifiers')
-          .select('user_id')
-          .eq('username', trimmed.toLowerCase())
-          .maybeSingle();
-
-        if (lookupError || !mapping) {
-          setError('Username not found.');
-          setLoading(false);
-          return;
-        }
-
-        authEmail = `${trimmed.toLowerCase()}@catchconnect.local`;
-      }
-
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email: authEmail,
+        email: trimmed.toLowerCase(),
         password,
       });
 
       if (signInError) {
         setError('Invalid credentials. Please try again.');
-        setLoading(false);
         return;
       }
 
@@ -93,7 +69,7 @@ export default function EmailSignInScreen() {
           <View style={styles.content}>
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>
-              Sign in with your email or username
+              Sign in with your email
             </Text>
 
             {error ? (
@@ -103,15 +79,16 @@ export default function EmailSignInScreen() {
             ) : null}
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email or Username</Text>
+              <Text style={styles.label}>Email</Text>
               <TextInput
                 style={styles.input}
                 value={identifier}
                 onChangeText={setIdentifier}
-                placeholder="e.g. johndoe or john@email.com"
+                placeholder="e.g. jake56@fake.com"
                 placeholderTextColor="rgba(245, 239, 224, 0.3)"
                 autoCapitalize="none"
                 autoCorrect={false}
+                keyboardType="email-address"
               />
             </View>
 

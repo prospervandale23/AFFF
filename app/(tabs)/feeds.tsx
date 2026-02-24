@@ -53,11 +53,9 @@ export default function FeedsScreen() {
         setLoading(false);
         return;
       }
-      
+
       setCurrentUserId(session.user.id);
 
-      // DEFENSIVE API CALL: 
-      // If your API/Database isn't updated yet, this try/catch prevents the blank screen.
       try {
         const matches = await getPotentialMatches(session.user.id, {
           fishingType: fishingType || undefined,
@@ -68,7 +66,7 @@ export default function FeedsScreen() {
         setBuddies(matches || []);
       } catch (apiError) {
         console.warn("API Error (likely missing SQL/RPC):", apiError);
-        setBuddies([]); // Default to empty if API fails
+        setBuddies([]);
       }
 
       setCurrentIndex(0);
@@ -90,10 +88,10 @@ export default function FeedsScreen() {
       const conv = await startConversation(currentUserId, buddy.id);
       router.push({
         pathname: "/conversation/[id]",
-        params: { 
-          id: conv.id, 
-          name: buddy.display_name || 'Fisherman', 
-          photo: buddy.profile_photo_url || '' 
+        params: {
+          id: conv.id,
+          name: buddy.display_name || 'Fisherman',
+          photo: buddy.profile_photo_url || ''
         }
       });
     } catch (error) {
@@ -112,7 +110,7 @@ export default function FeedsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      
+
       {/* HEADER SECTION */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
@@ -120,8 +118,7 @@ export default function FeedsScreen() {
             <Text style={styles.headerTitle}>FISHING BUDDIES</Text>
             <Text style={styles.headerSubtitle}>{buddies.length} nearby anglers</Text>
           </View>
-
-          <Pressable 
+          <Pressable
             style={({ pressed }) => [styles.filterBtn, pressed && { opacity: 0.7 }]}
             onPress={() => setIsModalVisible(true)}
           >
@@ -135,42 +132,65 @@ export default function FeedsScreen() {
         {currentBuddy ? (
           <View style={styles.card}>
             <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+
+              {/* Photo with name/location overlay */}
               <View style={styles.photoContainer}>
                 {currentBuddy.profile_photo_url ? (
-                  <Image source={{ uri: currentBuddy.profile_photo_url }} style={styles.photo} resizeMode="cover" />
+                  <Image
+                    source={{ uri: currentBuddy.profile_photo_url }}
+                    style={styles.photo}
+                    resizeMode="cover"
+                  />
                 ) : (
                   <View style={styles.placeholder}>
                     <Text style={styles.placeholderText}>NO PHOTO</Text>
                   </View>
                 )}
-              </View>
 
-              <View style={styles.infoBar}>
-                <Text style={styles.name}>{currentBuddy.display_name || 'Anonymous'}</Text>
-                <Text style={styles.location}>📍 {currentBuddy.home_port || 'Unknown location'}</Text>
-              </View>
-
-              <View style={styles.details}>
-                <Text style={styles.bio}>{currentBuddy.bio || "No bio yet. Ready to fish!"}</Text>
-                <View style={styles.chipRow}>
-                  <View style={styles.chip}>
-                    <Text style={styles.chipText}>{currentBuddy.experience_level || 'Beginner'}</Text>
-                  </View>
-                  <View style={[styles.chip, { backgroundColor: FishingTheme.colors.sageGreen }]}>
-                    <Text style={styles.chipText}>{currentBuddy.fishing_type || 'Angler'}</Text>
-                  </View>
-                  {currentBuddy['has_boat'] && (
-                    <View style={[styles.chip, { backgroundColor: FishingTheme.colors.tan }]}>
-                      <Text style={[styles.chipText, { color: FishingTheme.colors.darkGreen }]}>🚤 Has Boat</Text>
-                    </View>
-                  )}
+                {/* Dark scrim + text pinned to bottom of photo */}
+                <View style={styles.photoOverlay}>
+                  <Text style={styles.overlayName}>
+                    {currentBuddy.display_name || 'Anonymous'}
+                  </Text>
+                  <Text style={styles.overlayFieldLabel}>Location</Text>
+                  <Text style={styles.overlayLocation}>
+                    {currentBuddy.home_port || 'Unknown location'}
+                  </Text>
                 </View>
+              </View>
+
+              {/* Details */}
+              <View style={styles.details}>
+                <Text style={styles.bio}>
+                  {currentBuddy.bio || "No bio yet. Ready to fish!"}
+                </Text>
+
+                {currentBuddy.experience_level && (
+                  <View style={styles.attributeRow}>
+                    <Text style={styles.attributeLabel}>Experience Level</Text>
+                    <Text style={styles.attributeValue}>{currentBuddy.experience_level}</Text>
+                  </View>
+                )}
+
+                {currentBuddy.fishing_type && (
+                  <View style={styles.attributeRow}>
+                    <Text style={styles.attributeLabel}>Preferred Environment</Text>
+                    <Text style={styles.attributeValue}>{currentBuddy.fishing_type}</Text>
+                  </View>
+                )}
+
+                {currentBuddy['has_boat'] && (
+                  <View style={styles.attributeRow}>
+                    <Text style={styles.attributeLabel}>Boat Access</Text>
+                    <Text style={styles.attributeValue}>Has Boat</Text>
+                  </View>
+                )}
               </View>
             </ScrollView>
 
             <View style={styles.footer}>
-              <Pressable 
-                style={[styles.navBtn, currentIndex === 0 && styles.disabled]} 
+              <Pressable
+                style={[styles.navBtn, currentIndex === 0 && styles.disabled]}
                 onPress={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
                 disabled={currentIndex === 0}
               >
@@ -179,8 +199,8 @@ export default function FeedsScreen() {
               <Pressable style={styles.chatBtn} onPress={() => handleStartChat(currentBuddy)}>
                 <Text style={styles.chatBtnText}>MESSAGE</Text>
               </Pressable>
-              <Pressable 
-                style={[styles.navBtn, currentIndex === buddies.length - 1 && styles.disabled]} 
+              <Pressable
+                style={[styles.navBtn, currentIndex === buddies.length - 1 && styles.disabled]}
                 onPress={() => setCurrentIndex(Math.min(buddies.length - 1, currentIndex + 1))}
                 disabled={currentIndex === buddies.length - 1}
               >
@@ -201,14 +221,13 @@ export default function FeedsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>FILTERS</Text>
-            
-            {/* Distance Filter */}
+
             <Text style={styles.filterLabel}>Distance: {filterDistance} miles</Text>
             <View style={styles.segmentRow}>
               {[10, 25, 50, 100].map(d => (
-                <Pressable 
-                  key={d} 
-                  onPress={() => setFilterDistance(d)} 
+                <Pressable
+                  key={d}
+                  onPress={() => setFilterDistance(d)}
                   style={[styles.segBtn, filterDistance === d && styles.segBtnActive]}
                 >
                   <Text style={[styles.segBtnText, filterDistance === d && styles.segBtnTextActive]}>
@@ -218,13 +237,12 @@ export default function FeedsScreen() {
               ))}
             </View>
 
-            {/* Experience Filter */}
             <Text style={styles.filterLabel}>Experience Level</Text>
             <View style={styles.segmentRow}>
               {EXPERIENCE_OPTIONS.map(exp => (
-                <Pressable 
-                  key={exp} 
-                  onPress={() => setFilterExperience(exp)} 
+                <Pressable
+                  key={exp}
+                  onPress={() => setFilterExperience(exp)}
                   style={[styles.segBtn, styles.expBtn, filterExperience === exp && styles.segBtnActive]}
                 >
                   <Text style={[styles.segBtnText, filterExperience === exp && styles.segBtnTextActive]}>
@@ -234,18 +252,16 @@ export default function FeedsScreen() {
               ))}
             </View>
 
-            {/* Has Boat Toggle */}
             <View style={styles.toggleRow}>
               <Text style={styles.filterLabel}>Has Boat</Text>
-              <Switch 
-                value={filterHasBoat} 
-                onValueChange={setFilterHasBoat} 
-                trackColor={{ false: '#ccc', true: FishingTheme.colors.darkGreen }} 
+              <Switch
+                value={filterHasBoat}
+                onValueChange={setFilterHasBoat}
+                trackColor={{ false: '#ccc', true: FishingTheme.colors.darkGreen }}
                 thumbColor={filterHasBoat ? FishingTheme.colors.tan : '#f4f3f4'}
               />
             </View>
 
-            {/* Active Filters Summary */}
             <View style={styles.activeFilters}>
               <Text style={styles.activeFiltersLabel}>Active filters:</Text>
               <Text style={styles.activeFiltersText}>
@@ -280,24 +296,77 @@ const styles = StyleSheet.create({
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   headerTitle: { fontSize: 24, fontWeight: '900', color: FishingTheme.colors.darkGreen },
   headerSubtitle: { fontSize: 13, color: FishingTheme.colors.text.tertiary, marginTop: 4 },
-  
+
   filterBtn: { backgroundColor: FishingTheme.colors.tan, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: FishingTheme.colors.border },
   filterBtnText: { fontSize: 11, fontWeight: '800', color: FishingTheme.colors.darkGreen },
 
   main: { flex: 1, padding: 16 },
   card: { flex: 1, backgroundColor: FishingTheme.colors.card, borderRadius: 24, overflow: 'hidden', borderWidth: 2, borderColor: FishingTheme.colors.border },
-  photoContainer: { width: '100%', height: 350 },
+
+  // Photo
+  photoContainer: { width: '100%', height: 350, position: 'relative' },
   photo: { width: '100%', height: '100%' },
   placeholder: { width: '100%', height: '100%', backgroundColor: FishingTheme.colors.sageGreen, justifyContent: 'center', alignItems: 'center' },
   placeholderText: { color: 'white', fontWeight: '800' },
-  infoBar: { backgroundColor: FishingTheme.colors.darkGreen, padding: 20 },
-  name: { fontSize: 26, fontWeight: '900', color: 'white' },
-  location: { fontSize: 14, color: 'white', opacity: 0.9, marginTop: 4 },
-  details: { padding: 20 },
+
+  // Overlay: positioned over the bottom of the photo
+  photoOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+    paddingTop: 2,
+    paddingBottom: 5,
+    backgroundColor: 'rgba(0, 0, 0, 0.42)',
+  },
+  overlayName: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: 'white',
+    marginBottom: 2,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  overlayFieldLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.65)',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 1,
+  },
+  overlayLocation: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: 'white',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+
+  // Details
+  details: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 24 },
   bio: { fontSize: 16, color: FishingTheme.colors.text.primary, marginBottom: 20 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  chip: { backgroundColor: FishingTheme.colors.darkGreen, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  chipText: { color: 'white', fontSize: 11, fontWeight: '700' },
+
+  // Labeled attribute rows
+  attributeRow: { marginBottom: 16 },
+  attributeLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: FishingTheme.colors.text.tertiary,
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+    marginBottom: 3,
+  },
+  attributeValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: FishingTheme.colors.text.primary,
+    textTransform: 'capitalize',
+  },
+
   footer: { flexDirection: 'row', padding: 16, gap: 10, backgroundColor: FishingTheme.colors.background },
   navBtn: { flex: 1, padding: 12, borderRadius: 10, backgroundColor: FishingTheme.colors.tan, alignItems: 'center' },
   navBtnText: { fontWeight: '800', color: FishingTheme.colors.darkGreen },

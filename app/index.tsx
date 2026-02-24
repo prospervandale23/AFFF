@@ -225,7 +225,7 @@ export default function WelcomeScreen() {
 
             <Pressable 
               style={styles.signInButton}
-              onPress={() => router.push('/auth/email-signin')}
+              onPress={() => router.push('/auth/username-signin')}
               disabled={signingIn}
             >
               <Text style={styles.signInButtonText}>SIGN IN</Text>

@@ -88,7 +88,7 @@ export default function RootLayout() {
               animation: 'slide_from_right',
             }}
           />
-          <Stack.Screen name="auth/email-signin" />
+          <Stack.Screen name="auth/username-signin" />
           <Stack.Screen name="auth/create-account" />
           <Stack.Screen name="terms" />
         </Stack>

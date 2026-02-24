@@ -1,16 +1,16 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    SafeAreaView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    View
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 
@@ -23,16 +23,13 @@ export default function CreateAccountScreen() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const isEmail = identifier.includes('@');
-
   async function handleCreateAccount() {
     setError('');
     setSuccess('');
 
-    // Validation
     const trimmed = identifier.trim();
     if (!trimmed) {
-      setError('Please enter an email or username.');
+      setError('Please enter an email.');
       return;
     }
 
@@ -49,59 +46,24 @@ export default function CreateAccountScreen() {
     setLoading(true);
 
     try {
-      // Determine the email to use for Supabase auth
-      let authEmail: string;
-
-      if (isEmail) {
-        authEmail = trimmed.toLowerCase();
-      } else {
-        // Username-based: check uniqueness first
-        const { data: existing, error: checkError } = await supabase
-          .from('user_identifiers')
-          .select('id')
-          .eq('username', trimmed.toLowerCase())
-          .maybeSingle();
-
-        if (checkError) {
-          setError('Error checking username availability.');
-          setLoading(false);
-          return;
-        }
-
-        if (existing) {
-          setError('That username is already taken.');
-          setLoading(false);
-          return;
-        }
-
-        // Generate internal email from username
-        authEmail = `${trimmed.toLowerCase()}@catchconnect.local`;
-      }
-
-      // Create the account in Supabase Auth
       const { data, error: signUpError } = await supabase.auth.signUp({
-        email: authEmail,
+        email: trimmed.toLowerCase(),
         password,
       });
 
       if (signUpError) {
-        // Handle common errors
         if (signUpError.message.includes('already registered')) {
-          setError(isEmail
-            ? 'An account with this email already exists.'
-            : 'That username is already taken.');
+          setError('An account with this email already exists.');
         } else {
           setError(signUpError.message);
         }
-        setLoading(false);
         return;
       }
 
       if (data.user) {
-        // Create profile
         await supabase.from('profiles').upsert({
           id: data.user.id,
-          display_name: isEmail ? trimmed.split('@')[0] : trimmed,
+          display_name: trimmed.split('@')[0],
           fishing_type: null,
           experience_level: null,
           has_boat: false,
@@ -114,21 +76,10 @@ export default function CreateAccountScreen() {
           profile_photo_url: null,
         });
 
-        // If username-based, store the mapping
-        if (!isEmail) {
-          await supabase.from('user_identifiers').insert({
-            user_id: data.user.id,
-            username: trimmed.toLowerCase(),
-          });
-        }
-
-        // If email confirmation is required
         if (data.session) {
           router.replace('/(tabs)/home');
         } else {
-          setSuccess(isEmail
-            ? 'Account created! Check your email to verify.'
-            : 'Account created! You can now sign in.');
+          setSuccess('Account created! You can now sign in.');
         }
       }
     } catch (err: any) {
@@ -154,7 +105,7 @@ export default function CreateAccountScreen() {
           <View style={styles.content}>
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>
-              Use an email address or create a unique username
+              Sign up with any email format
             </Text>
 
             {error ? (
@@ -176,18 +127,19 @@ export default function CreateAccountScreen() {
             ) : (
               <>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Email or Username</Text>
+                  <Text style={styles.label}>Email</Text>
                   <TextInput
                     style={styles.input}
                     value={identifier}
                     onChangeText={setIdentifier}
-                    placeholder="e.g. johndoe or john@email.com"
+                    placeholder="e.g. jake56@fake.com"
                     placeholderTextColor="rgba(245, 239, 224, 0.3)"
                     autoCapitalize="none"
                     autoCorrect={false}
+                    keyboardType="email-address"
                   />
                   <Text style={styles.hint}>
-                    {isEmail ? '📧 Signing up with email' : '👤 Signing up with username (no email needed)'}
+                    No real email needed — e.g. jake56@fake.com. Note: fake emails cannot be used for account recovery.
                   </Text>
                 </View>
 
