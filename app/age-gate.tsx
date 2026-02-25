@@ -1,14 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    Pressable,
-    SafeAreaView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    View
+  Animated,
+  Pressable,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View
 } from 'react-native';
 
 const MONTHS = [
@@ -53,6 +53,12 @@ interface ScrollPickerProps {
 
 function ScrollPicker({ items, selectedIndex, onSelect, width }: ScrollPickerProps) {
   const scrollY = useRef(new Animated.Value(selectedIndex * ITEM_HEIGHT)).current;
+
+  useEffect(() => {
+  // Keep a listener registered to suppress the warning
+  const id = scrollY.addListener(() => {});
+  return () => scrollY.removeListener(id);
+}, []);
   const flatListRef = useRef<any>(null);
 
   return (

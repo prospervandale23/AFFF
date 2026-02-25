@@ -1,4 +1,3 @@
-// app/(tabs)/_layout.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
@@ -42,7 +41,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="messages"
         listeners={{
-          tabPress: () => clearBadge(), // Resets badge when tab is clicked
+          tabPress: () => clearBadge(),
         }}
         options={{
           title: 'Chats',

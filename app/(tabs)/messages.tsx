@@ -230,12 +230,11 @@ export default function MessagesScreen() {
                   <Text style={styles.messageTime}>{formatTime(item.last_message_time)}</Text>
                 </View>
                 <View style={styles.messagePreviewRow}>
-                  {/* In the renderItem of MessagesScreen, replace the message preview text: */}      
-                  <Text 
-                    style={[styles.messagePreview, item.unread_count > 0 && styles.messagePreviewUnread]} 
-                    numberOfLines={1}
-                  >
-                   {item.last_message.startsWith('https://') ? '⛶ Photo' : item.last_message}
+                    <Text 
+                      style={[styles.messagePreview, item.unread_count > 0 && styles.messagePreviewUnread]} 
+                      numberOfLines={1}
+                    >
+                    {item.last_message.startsWith('https://') ? '⛶ Photo' : item.last_message}
                   </Text>
                   {item.unread_count > 0 && (
                     <View style={styles.unreadCountBadge}><Text style={styles.unreadCountText}>{item.unread_count}</Text></View>
