@@ -13,6 +13,9 @@
       "bundleIdentifier": "com.pvandale766.catchconnect",
       "buildNumber": "1",
       "usesAppleSignIn": true,
+      "entitlements": {
+        "aps-environment": "development"
+      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Catch Connect uses your location to find nearby fishing buddies and show local fishing conditions.",
         "NSCameraUsageDescription": "Take photos of your catches and profile to share with the fishing community.",
@@ -37,7 +40,9 @@
         "CAMERA",
         "READ_MEDIA_IMAGES",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
       ]
     },
     "web": {
@@ -60,6 +65,14 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Allow Catch Connect to use your location to find nearby fishing buddies."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#2F4538",
+          "sounds": []
         }
       ],
       "expo-image-picker",

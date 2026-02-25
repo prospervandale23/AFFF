@@ -1,4 +1,3 @@
-// app/_layout.tsx
 import * as Notifications from 'expo-notifications';
 import { Stack } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -6,35 +5,50 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { FishingProvider } from '../contexts/FishingContext';
 import { NotificationProvider } from '../contexts/NotificationContext';
+import { registerForPushNotifications, savePushToken } from '../lib/notifications';
+import { supabase } from '../lib/supabase';
 
 const splashVideo = require('../assets/videos/splash.mp4');
 
-// Configures how notifications are handled while the app is open
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: false,
-    shouldPlaySound: false,
+    shouldShowAlert: true,   // changed to true so banners show
+    shouldPlaySound: true,   // changed to true
     shouldSetBadge: true,
-    shouldShowBanner: false,
-    shouldShowList: false,
+    shouldShowBanner: true,  // changed to true
+    shouldShowList: true,    // changed to true
   }),
 });
 
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
 
-  // 1. Request Permission to update the App Icon Badge
   useEffect(() => {
-    async function requestPermissions() {
-      const { status } = await Notifications.getPermissionsAsync();
-      if (status !== 'granted') {
-        await Notifications.requestPermissionsAsync();
+    async function setupPushNotifications() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
+      const token = await registerForPushNotifications();
+      if (token) {
+        await savePushToken(session.user.id, token);
       }
     }
-    requestPermissions();
+    setupPushNotifications();
   }, []);
 
-  // 2. Splash Video Logic
+  // Listen for auth state changes to register token on fresh sign-in
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+          const token = await registerForPushNotifications();
+          if (token) await savePushToken(session.user.id, token);
+        }
+      }
+    );
+    return () => subscription.unsubscribe();
+  }, []);
+
   const player = useVideoPlayer(splashVideo, (p) => {
     p.loop = false;
     p.muted = true;
@@ -81,8 +95,8 @@ export default function RootLayout() {
           <Stack.Screen name="index" />
           <Stack.Screen name="age-gate" />
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen 
-            name="conversation/[id]" 
+          <Stack.Screen
+            name="conversation/[id]"
             options={{
               presentation: 'card',
               animation: 'slide_from_right',
