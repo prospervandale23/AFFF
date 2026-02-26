@@ -4,7 +4,6 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 interface NotificationContextType {
   unreadCount: number;
   setUnreadCount: (count: number) => void;
-  clearBadge: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -12,15 +11,13 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Sync with System App Icon Badge
+  // Keep system app icon badge in sync with tab badge
   useEffect(() => {
     Notifications.setBadgeCountAsync(unreadCount);
   }, [unreadCount]);
 
-  const clearBadge = () => setUnreadCount(0);
-
   return (
-    <NotificationContext.Provider value={{ unreadCount, setUnreadCount, clearBadge }}>
+    <NotificationContext.Provider value={{ unreadCount, setUnreadCount }}>
       {children}
     </NotificationContext.Provider>
   );

@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FishingTheme } from '../../constants/FishingTheme';
+import { useNotifications } from '../../contexts/NotificationContext';
 import { blockUser, getBlockedAndBlockerIds } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 
@@ -26,7 +27,6 @@ interface ConversationPreview {
   fishing_type?: 'freshwater' | 'saltwater';
 }
 
-// Interface to fix VS Code TypeScript errors
 interface SupabaseConversationResponse {
   id: string;
   participant_one: string;
@@ -44,51 +44,67 @@ interface SupabaseConversationResponse {
     profile_photo_url: string | null;
     fishing_type: 'freshwater' | 'saltwater' | null;
   } | null;
-  messages: {
-    content: string;
-    created_at: string;
-    sender_id: string;
-    read_at: string | null;
-  }[];
+}
+
+interface UnreadMessage {
+  conversation_id: string;
+}
+
+interface LastMessage {
+  conversation_id: string;
+  content: string;
+  created_at: string;
 }
 
 export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { setUnreadCount } = useNotifications();
+
   const [conversations, setConversations] = useState<ConversationPreview[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const currentUserIdRef = useRef<string | null>(null);
 
+  // On mount, get session once
   useEffect(() => {
-    initializeMessages();
-    
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        currentUserIdRef.current = session.user.id;
+        loadConversations(session.user.id);
+      }
+      setLoading(false);
+    });
+
+    // Realtime subscription — fires when any message is inserted or updated
+    // Re-runs loadConversations which recomputes both badge counts
     const channel = supabase
       .channel('messages-refresh')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
-        if (currentUserId) loadConversations(currentUserId);
-      })
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'messages' },
+        () => {
+          if (currentUserIdRef.current) {
+            loadConversations(currentUserIdRef.current);
+          }
+        }
+      )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [currentUserId]);
+  }, []);
 
-  async function initializeMessages() {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setCurrentUserId(session.user.id);
-        await loadConversations(session.user.id);
+  // Every time this screen gains focus (including returning from a conversation),
+  // reload so badge counts reflect any reads that happened in the conversation screen
+  useFocusEffect(
+    useCallback(() => {
+      if (currentUserIdRef.current) {
+        loadConversations(currentUserIdRef.current);
       }
-    } catch (error) {
-      console.error('Error:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
+    }, [])
+  );
 
   async function loadConversations(userId: string) {
     try {
-      // Get blocked user IDs to filter them out
       let blockedIds: string[] = [];
       try {
         blockedIds = await getBlockedAndBlockerIds(userId);
@@ -96,7 +112,8 @@ export default function MessagesScreen() {
         console.error('Block list fetch failed:', e);
       }
 
-      const { data, error } = await supabase
+      // 1. Conversation metadata + profiles
+      const { data: convData, error: convError } = await supabase
         .from('conversations')
         .select(`
           id,
@@ -104,54 +121,92 @@ export default function MessagesScreen() {
           participant_two,
           last_message_at,
           participant_one_profile:profiles!participant_one(id, display_name, profile_photo_url, fishing_type),
-          participant_two_profile:profiles!participant_two(id, display_name, profile_photo_url, fishing_type),
-          messages(content, created_at, sender_id, read_at)
+          participant_two_profile:profiles!participant_two(id, display_name, profile_photo_url, fishing_type)
         `)
         .or(`participant_one.eq.${userId},participant_two.eq.${userId}`)
         .order('last_message_at', { ascending: false });
 
-      if (error) throw error;
+      if (convError) throw convError;
 
-      // Cast the data to our interface to resolve VS Code issues
-      const typedData = (data as unknown) as SupabaseConversationResponse[];
+      const typedConvData = (convData as unknown) as SupabaseConversationResponse[];
+      const convIds = typedConvData.map(c => c.id);
 
-      const transformed: ConversationPreview[] = typedData
+      if (convIds.length === 0) {
+        setConversations([]);
+        setUnreadCount(0);
+        return;
+      }
+
+      // 2. All unread messages from other users across these conversations
+      const { data: unreadData } = await supabase
+        .from('messages')
+        .select('conversation_id')
+        .in('conversation_id', convIds)
+        .neq('sender_id', userId)
+        .is('read_at', null);
+
+      // 3. Most recent message per conversation for preview text
+      const { data: lastMsgData } = await supabase
+        .from('messages')
+        .select('conversation_id, content, created_at')
+        .in('conversation_id', convIds)
+        .order('created_at', { ascending: false });
+
+      // per-row: message count per conversation
+      const unreadCountMap = new Map<string, number>();
+      (unreadData as UnreadMessage[] || []).forEach(msg => {
+        unreadCountMap.set(
+          msg.conversation_id,
+          (unreadCountMap.get(msg.conversation_id) || 0) + 1
+        );
+      });
+
+      // last message lookup
+      const lastMessageMap = new Map<string, LastMessage>();
+      (lastMsgData as LastMessage[] || []).forEach(msg => {
+        if (!lastMessageMap.has(msg.conversation_id)) {
+          lastMessageMap.set(msg.conversation_id, msg);
+        }
+      });
+
+      const transformed: ConversationPreview[] = typedConvData
         .map(conv => {
           const isPartOne = conv.participant_one === userId;
-          const otherProfile = isPartOne ? conv.participant_two_profile : conv.participant_one_profile;
+          const otherProfile = isPartOne
+            ? conv.participant_two_profile
+            : conv.participant_one_profile;
           const otherUserId = otherProfile?.id || '';
-          
-          const lastMsg = conv.messages && conv.messages.length > 0 
-            ? conv.messages[conv.messages.length - 1] 
-            : { content: 'No messages yet', created_at: conv.last_message_at };
-          
-          const unreadCount = conv.messages.filter(m => 
-            m.sender_id !== userId && !m.read_at
-          ).length;
+          const lastMsg = lastMessageMap.get(conv.id);
 
           return {
             id: conv.id,
             other_user_id: otherUserId,
             other_user_name: otherProfile?.display_name || 'Fisherman',
             other_user_photo: otherProfile?.profile_photo_url || undefined,
-            last_message: lastMsg.content,
-            last_message_time: lastMsg.created_at,
-            unread_count: unreadCount,
-            fishing_type: otherProfile?.fishing_type || undefined
+            last_message: lastMsg?.content || 'No messages yet',
+            last_message_time: lastMsg?.created_at || conv.last_message_at,
+            unread_count: unreadCountMap.get(conv.id) || 0,
+            fishing_type: otherProfile?.fishing_type || undefined,
           };
         })
-        // Filter out conversations with blocked users
         .filter(conv => !blockedIds.includes(conv.other_user_id));
 
       setConversations(transformed);
+
+      // Tab badge = number of conversations with any unread messages (1 per conversation)
+      // This is what drives the Chats tab badge and the app icon badge
+      const unreadConversationCount = transformed.filter(
+        conv => conv.unread_count > 0
+      ).length;
+      setUnreadCount(unreadConversationCount);
+
     } catch (error) {
       console.error('Load Error:', error);
     }
   }
 
   async function handleBlockUser(otherUserId: string, otherUserName: string) {
-    if (!currentUserId) return;
-
+    if (!currentUserIdRef.current) return;
     Alert.alert(
       'Block User',
       `Are you sure you want to block ${otherUserName}? They won't be able to message you or appear in your feed.`,
@@ -162,11 +217,9 @@ export default function MessagesScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await blockUser(currentUserId, otherUserId);
-              // Reload conversations to remove the blocked user's conversation
-              await loadConversations(currentUserId);
+              await blockUser(currentUserIdRef.current!, otherUserId);
+              await loadConversations(currentUserIdRef.current!);
             } catch (error) {
-              console.error('Block error:', error);
               Alert.alert('Error', 'Could not block user. Please try again.');
             }
           }
@@ -181,7 +234,7 @@ export default function MessagesScreen() {
     const diffMins = Math.floor((now.getTime() - date.getTime()) / 60000);
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffMins < 1440) return `${Math.floor(diffMins/60)}h ago`;
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   }
 
@@ -210,7 +263,7 @@ export default function MessagesScreen() {
         }
         renderItem={({ item }) => (
           <View style={styles.conversationRow}>
-            <Pressable 
+            <Pressable
               style={styles.conversationItem}
               onPress={() => router.push({
                 pathname: '/conversation/[id]',
@@ -221,7 +274,9 @@ export default function MessagesScreen() {
                 {item.other_user_photo ? (
                   <Image source={{ uri: item.other_user_photo }} style={styles.avatar} />
                 ) : (
-                  <View style={styles.avatarPlaceholder}><Text style={styles.avatarInitial}>{item.other_user_name[0]}</Text></View>
+                  <View style={styles.avatarPlaceholder}>
+                    <Text style={styles.avatarInitial}>{item.other_user_name[0]}</Text>
+                  </View>
                 )}
               </View>
               <View style={styles.messageContent}>
@@ -230,14 +285,16 @@ export default function MessagesScreen() {
                   <Text style={styles.messageTime}>{formatTime(item.last_message_time)}</Text>
                 </View>
                 <View style={styles.messagePreviewRow}>
-                    <Text 
-                      style={[styles.messagePreview, item.unread_count > 0 && styles.messagePreviewUnread]} 
-                      numberOfLines={1}
-                    >
+                  <Text
+                    style={[styles.messagePreview, item.unread_count > 0 && styles.messagePreviewUnread]}
+                    numberOfLines={1}
+                  >
                     {item.last_message.startsWith('https://') ? '⛶ Photo' : item.last_message}
                   </Text>
                   {item.unread_count > 0 && (
-                    <View style={styles.unreadCountBadge}><Text style={styles.unreadCountText}>{item.unread_count}</Text></View>
+                    <View style={styles.unreadCountBadge}>
+                      <Text style={styles.unreadCountText}>{item.unread_count}</Text>
+                    </View>
                   )}
                 </View>
               </View>

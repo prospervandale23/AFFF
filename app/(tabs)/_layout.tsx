@@ -1,3 +1,4 @@
+// app/(tabs)/_layout.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
@@ -5,7 +6,7 @@ import { Colors } from '../../constants/Colors';
 import { useNotifications } from '../../contexts/NotificationContext';
 
 export default function TabsLayout() {
-  const { unreadCount, clearBadge } = useNotifications();
+  const { unreadCount } = useNotifications();
 
   return (
     <Tabs
@@ -40,9 +41,6 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="messages"
-        listeners={{
-          tabPress: () => clearBadge(),
-        }}
         options={{
           title: 'Chats',
           tabBarIcon: ({ color, size }) => <Ionicons name="chatbox-outline" color={color} size={size} />,
