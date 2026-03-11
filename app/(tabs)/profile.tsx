@@ -1,4 +1,3 @@
-import { useFishing } from '@/contexts/FishingContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -9,6 +8,7 @@ import {
   Alert,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -24,6 +24,9 @@ import { FishingTheme } from '../../constants/FishingTheme';
 import { BlockedUserInfo, getBlockedUsers, unblockUser } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 
+const BOAT_TYPES = ['Center Console', 'Sportfish', 'Downeast', 'Catamaran', 'Charter', 'Other'] as const;
+type BoatType = typeof BOAT_TYPES[number];
+
 interface SimpleProfile {
   display_name: string;
   bio: string;
@@ -35,14 +38,12 @@ interface SimpleProfile {
   boat_type: string;
   boat_length: string;
   profile_photo_url: string;
-  fishing_type: 'freshwater' | 'saltwater' | null;
 }
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { fishingType } = useFishing();
   const router = useRouter();
-  
+
   const [profile, setProfile] = useState<SimpleProfile>({
     display_name: '',
     bio: '',
@@ -54,9 +55,8 @@ export default function ProfileScreen() {
     boat_type: '',
     boat_length: '',
     profile_photo_url: '',
-    fishing_type: fishingType
   });
-  
+
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [blockedModalOpen, setBlockedModalOpen] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUserInfo[]>([]);
@@ -68,23 +68,20 @@ export default function ProfileScreen() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Boat length input state — kept separate so we can validate on save
+  const [boatLengthInput, setBoatLengthInput] = useState('');
+
   useEffect(() => {
     initializeAuth();
   }, []);
-
-  useEffect(() => {
-    if (fishingType && profile.fishing_type !== fishingType) {
-      setProfile(prev => ({ ...prev, fishing_type: fishingType }));
-    }
-  }, [fishingType]);
 
   async function initializeAuth() {
     try {
       setLoading(true);
       setAuthError(null);
-      
+
       const { data: { session }, error } = await supabase.auth.getSession();
-      
+
       if (error) {
         setAuthError(error.message);
         setIsSignedIn(false);
@@ -116,18 +113,14 @@ export default function ProfileScreen() {
           setAuthError(null);
           resetProfile();
         } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-          if (isSignedIn) {
-            await loadProfile(session.user.id);
-          }
+          if (isSignedIn) await loadProfile(session.user.id);
         }
-      } catch (error) {
+      } catch {
         setAuthError('Authentication error occurred');
       }
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => { subscription.unsubscribe(); };
   }
 
   async function loadProfile(userId: string) {
@@ -138,16 +131,15 @@ export default function ProfileScreen() {
         .eq('id', userId)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
-        return;
-      }
+      if (error && error.code !== 'PGRST116') return;
 
       if (data) {
-        // Add cache-busting for profile photo
-        const photoUrl = data.profile_photo_url 
-          ? `${data.profile_photo_url}?t=${Date.now()}` 
+        const photoUrl = data.profile_photo_url
+          ? `${data.profile_photo_url}?t=${Date.now()}`
           : '';
-        
+
+        const length = data.boat_length?.toString() || '';
+
         setProfile({
           display_name: data.display_name || '',
           bio: data.bio || '',
@@ -157,10 +149,10 @@ export default function ProfileScreen() {
           experience_level: data.experience_level,
           has_boat: data.has_boat || false,
           boat_type: data.boat_type || '',
-          boat_length: data.boat_length || '',
+          boat_length: length,
           profile_photo_url: photoUrl,
-          fishing_type: data.fishing_type || fishingType
         });
+        setBoatLengthInput(length);
       }
     } catch (error) {
       console.error('Load profile error:', error);
@@ -179,11 +171,27 @@ export default function ProfileScreen() {
       boat_type: '',
       boat_length: '',
       profile_photo_url: '',
-      fishing_type: fishingType
     });
+    setBoatLengthInput('');
   }
 
-  // --- Delete Account ---
+  // ── Boat length validation ──────────────────────────────────────────────────
+  function handleBoatLengthChange(text: string) {
+    // Allow only digits
+    const digits = text.replace(/[^0-9]/g, '');
+    if (digits === '') {
+      setBoatLengthInput('');
+      return;
+    }
+    const num = parseInt(digits, 10);
+    if (num >= 1 && num <= 300) {
+      setBoatLengthInput(String(num));
+    } else if (num > 300) {
+      setBoatLengthInput('300');
+    }
+  }
+
+  // ── Delete Account ──────────────────────────────────────────────────────────
   async function handleDeleteAccount() {
     Alert.alert(
       'Delete Account',
@@ -199,11 +207,7 @@ export default function ProfileScreen() {
               'All your data will be permanently deleted. You will need to create a new account to use Catch Connect again.',
               [
                 { text: 'Go Back', style: 'cancel' },
-                {
-                  text: 'Yes, Delete Everything',
-                  style: 'destructive',
-                  onPress: executeDeleteAccount,
-                },
+                { text: 'Yes, Delete Everything', style: 'destructive', onPress: executeDeleteAccount },
               ]
             );
           },
@@ -215,32 +219,22 @@ export default function ProfileScreen() {
   async function executeDeleteAccount() {
     try {
       setDeleting(true);
-
       const { error } = await supabase.rpc('delete_user_account');
-
       if (error) {
-        console.error('Delete account error:', error);
         Alert.alert('Error', 'Failed to delete account: ' + error.message);
         return;
       }
-
-      // Clear local storage
       await AsyncStorage.multiRemove(['age_verified', 'user_dob', 'age_gate_denied']);
-
-      // Sign out locally
       await supabase.auth.signOut();
-
-      // Navigate to welcome screen
       router.replace('/');
     } catch (error: any) {
-      console.error('Delete account error:', error);
       Alert.alert('Error', 'Something went wrong. Please try again.');
     } finally {
       setDeleting(false);
     }
   }
 
-  // --- Blocked Users ---
+  // ── Blocked Users ───────────────────────────────────────────────────────────
   async function openBlockedModal() {
     setBlockedModalOpen(true);
     setLoadingBlocked(true);
@@ -270,10 +264,8 @@ export default function ProfileScreen() {
               const { data: { session } } = await supabase.auth.getSession();
               if (!session?.user) return;
               await unblockUser(session.user.id, blockedId);
-              // Remove from local state
               setBlockedUsers(prev => prev.filter(u => u.blocked_id !== blockedId));
-            } catch (error) {
-              console.error('Unblock error:', error);
+            } catch {
               Alert.alert('Error', 'Could not unblock user. Please try again.');
             }
           }
@@ -282,14 +274,11 @@ export default function ProfileScreen() {
     );
   }
 
-  // --- Photo Functions ---
+  // ── Photo ───────────────────────────────────────────────────────────────────
   async function pickImage() {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: ['Cancel', 'Take Photo', 'Choose from Library'],
-          cancelButtonIndex: 0,
-        },
+        { options: ['Cancel', 'Take Photo', 'Choose from Library'], cancelButtonIndex: 0 },
         async (buttonIndex) => {
           if (buttonIndex === 1) await takePhoto();
           else if (buttonIndex === 2) await chooseFromLibrary();
@@ -308,97 +297,53 @@ export default function ProfileScreen() {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') return;
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
       if (!result.canceled && result.assets[0]) await uploadPhoto(result.assets[0].uri);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to take photo.');
-    }
+    } catch { Alert.alert('Error', 'Failed to take photo.'); }
   }
 
   async function chooseFromLibrary() {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') return;
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
       if (!result.canceled && result.assets[0]) await uploadPhoto(result.assets[0].uri);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to choose photo.');
-    }
+    } catch { Alert.alert('Error', 'Failed to choose photo.'); }
   }
 
   async function uploadPhoto(uri: string) {
     try {
       setUploadingPhoto(true);
-      
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        Alert.alert('Error', 'You must be signed in to upload a photo');
-        return;
-      }
+      if (!session?.user) { Alert.alert('Error', 'You must be signed in to upload a photo'); return; }
 
       const userId = session.user.id;
       const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const filePath = `${userId}/profile.${fileExt}`;
-      
-      console.log('📸 Upload path:', filePath);
-      
-      // Fetch as arraybuffer instead of blob
+
       const response = await fetch(uri);
       const arrayBuffer = await response.arrayBuffer();
-      
-      console.log('📦 ArrayBuffer size:', arrayBuffer.byteLength);
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('profile-photos')
-        .upload(filePath, arrayBuffer, { 
+        .upload(filePath, arrayBuffer, {
           contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
-          upsert: true 
+          upsert: true,
         });
 
-      if (uploadError) {
-        console.log('❌ Upload error:', uploadError);
-        throw uploadError;
-      }
-      
-      console.log('✅ Upload success:', uploadData);
+      if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('profile-photos')
-        .getPublicUrl(filePath);
-
-      console.log('🔗 Public URL:', publicUrl);
-
+      const { data: { publicUrl } } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
       const photoUrlWithTimestamp = `${publicUrl}?t=${Date.now()}`;
-
       setProfile(prev => ({ ...prev, profile_photo_url: photoUrlWithTimestamp }));
 
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ 
-          profile_photo_url: publicUrl,
-          updated_at: new Date().toISOString() 
-        })
+        .update({ profile_photo_url: publicUrl, updated_at: new Date().toISOString() })
         .eq('id', userId);
 
-      if (updateError) {
-        console.log('❌ Profile update error:', updateError);
-        Alert.alert('Warning', 'Photo uploaded but profile update failed: ' + updateError.message);
-      } else {
-        console.log('✅ Profile updated with photo URL');
-      }
-
+      if (updateError) Alert.alert('Warning', 'Photo uploaded but profile update failed: ' + updateError.message);
     } catch (error: any) {
-      console.log('❌ Upload failed:', error);
       Alert.alert('Upload Failed', error.message);
     } finally {
       setUploadingPhoto(false);
@@ -408,47 +353,33 @@ export default function ProfileScreen() {
   async function removePhoto() {
     Alert.alert('Remove Photo', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { 
-        text: 'Remove', 
+      {
+        text: 'Remove',
         style: 'destructive',
         onPress: async () => {
           try {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) return;
-
             const userId = session.user.id;
-
-            const { error: deleteError } = await supabase.storage
-              .from('profile-photos')
-              .remove([`${userId}/profile.jpg`, `${userId}/profile.png`, `${userId}/profile.webp`]);
-
-            if (deleteError) {
-              console.warn('Could not delete from storage:', deleteError);
-            }
-
-            await supabase
-              .from('profiles')
-              .update({ profile_photo_url: null, updated_at: new Date().toISOString() })
-              .eq('id', session.user.id);
-
+            await supabase.storage.from('profile-photos').remove([`${userId}/profile.jpg`, `${userId}/profile.png`, `${userId}/profile.webp`]);
+            await supabase.from('profiles').update({ profile_photo_url: null, updated_at: new Date().toISOString() }).eq('id', userId);
             setProfile(prev => ({ ...prev, profile_photo_url: '' }));
-          } catch (error) {
-            console.error('Error removing photo:', error);
-          }
+          } catch (error) { console.error('Error removing photo:', error); }
         }
       },
     ]);
   }
 
+  // ── Save ────────────────────────────────────────────────────────────────────
   async function saveProfile() {
     try {
       setSaving(true);
-      
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        Alert.alert('Error', 'No active session');
-        return;
-      }
+      if (!session) { Alert.alert('Error', 'No active session'); return; }
+
+      // Validate and normalise boat length
+      const lengthNum = boatLengthInput ? parseInt(boatLengthInput, 10) : null;
+      const validLength = lengthNum && lengthNum >= 1 && lengthNum <= 300 ? String(lengthNum) : null;
 
       const { error } = await supabase.from('profiles').upsert({
         id: session.user.id,
@@ -459,18 +390,17 @@ export default function ProfileScreen() {
         location: profile.location,
         experience_level: profile.experience_level,
         has_boat: profile.has_boat,
-        boat_type: profile.boat_type,
-        boat_length: profile.boat_length,
+        boat_type: profile.boat_type || null,
+        boat_length: validLength,
         profile_photo_url: profile.profile_photo_url?.split('?')[0] || null,
-        fishing_type: fishingType,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       });
 
-      if (error) {
-        Alert.alert('Error', error.message);
-        return;
-      }
-      
+      if (error) { Alert.alert('Error', error.message); return; }
+
+      // Keep local state in sync
+      setProfile(prev => ({ ...prev, boat_length: validLength || '' }));
+      setBoatLengthInput(validLength || '');
       setSettingsOpen(false);
       Alert.alert('Success', 'Profile saved!');
     } catch (error: any) {
@@ -483,16 +413,12 @@ export default function ProfileScreen() {
   async function signOut() {
     try {
       const { error } = await supabase.auth.signOut();
-      if (error) {
-        Alert.alert('Error', error.message);
-        return;
-      }
+      if (error) { Alert.alert('Error', error.message); return; }
       router.replace('/');
-    } catch (error) {
-      Alert.alert('Error', 'Sign out failed');
-    }
+    } catch { Alert.alert('Error', 'Sign out failed'); }
   }
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -508,12 +434,8 @@ export default function ProfileScreen() {
           <Text style={styles.logoText}>CC</Text>
         </View>
         <Text style={styles.sectionTitle}>CATCH CONNECT</Text>
-        <Text style={styles.signInText}>
-          Sign in to view and manage your profile.
-        </Text>
-        
+        <Text style={styles.signInText}>Sign in to view and manage your profile.</Text>
         {authError && <Text style={styles.errorText}>Error: {authError}</Text>}
-        
         <Pressable style={styles.signInButton} onPress={() => router.replace('/')}>
           <Text style={styles.signInButtonText}>GO TO SIGN IN</Text>
         </Pressable>
@@ -524,29 +446,20 @@ export default function ProfileScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView contentContainerStyle={[styles.profileContent, { paddingBottom: insets.bottom + 20 }]}>
+
+        {/* Header row */}
         <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.sectionTitle}>YOUR PROFILE</Text>
-            <View style={styles.fishingTypeBadge}>
-              <Text style={styles.fishingTypeText}>
-                {fishingType === 'freshwater' ? 'FRESHWATER' : 'SALTWATER'}
-              </Text>
-            </View>
-          </View>
+          <Text style={styles.sectionTitle}>YOUR PROFILE</Text>
           <Pressable style={styles.signOutButton} onPress={signOut}>
             <Text style={styles.signOutText}>SIGN OUT</Text>
           </Pressable>
         </View>
 
+        {/* Photo */}
         <View style={styles.photoSection}>
           <Pressable onPress={pickImage} disabled={uploadingPhoto}>
             {profile.profile_photo_url ? (
-              <Image 
-                source={{ uri: profile.profile_photo_url }} 
-                style={styles.profilePhoto}
-                onError={(e) => console.log('🖼️ Image load error:', e.nativeEvent.error)}
-                onLoad={() => console.log('🖼️ Image loaded successfully')}
-              />
+              <Image source={{ uri: profile.profile_photo_url }} style={styles.profilePhoto} />
             ) : (
               <View style={styles.profilePhotoPlaceholder}>
                 <Text style={styles.photoPlaceholderText}>
@@ -566,44 +479,23 @@ export default function ProfileScreen() {
             ) : null}
           </View>
         </View>
-        
-        <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>DISPLAY NAME</Text>
-          <Text style={styles.profileValue}>{profile.display_name || 'Not set'}</Text>
-        </View>
 
-        <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>BIO</Text>
-          <Text style={styles.profileValue}>{profile.bio || 'No bio yet'}</Text>
-        </View>
-
-        <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>HOME PORT</Text>
-          <Text style={styles.profileValue}>{profile.home_port || 'Not set'}</Text>
-        </View>
-
-        <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>AGE</Text>
-          <Text style={styles.profileValue}>{profile.age || 'Not set'}</Text>
-        </View>
-
-        <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>EXPERIENCE LEVEL</Text>
-          <Text style={styles.profileValue}>{profile.experience_level || 'Not set'}</Text>
-        </View>
-
-        <View style={styles.profileSection}>
-          <Text style={styles.profileLabel}>HAS BOAT</Text>
-          <Text style={styles.profileValue}>{profile.has_boat ? 'Yes' : 'No'}</Text>
-        </View>
+        {/* Profile fields */}
+        <ProfileRow label="DISPLAY NAME" value={profile.display_name || 'Not set'} />
+        <ProfileRow label="BIO" value={profile.bio || 'No bio yet'} />
+        <ProfileRow label="HOME PORT" value={profile.home_port || 'Not set'} />
+        <ProfileRow label="AGE" value={profile.age || 'Not set'} />
+        <ProfileRow label="EXPERIENCE LEVEL" value={profile.experience_level || 'Not set'} />
+        <ProfileRow label="HAS BOAT" value={profile.has_boat ? 'Yes' : 'No'} />
 
         {profile.has_boat && (
-          <View style={styles.profileSection}>
-            <Text style={styles.profileLabel}>BOAT DETAILS</Text>
-            <Text style={styles.profileValue}>
-              {profile.boat_type || 'Type not set'} • {profile.boat_length || 'Length not set'}
-            </Text>
-          </View>
+          <>
+            <ProfileRow label="BOAT TYPE" value={profile.boat_type || 'Not set'} />
+            <ProfileRow
+              label="BOAT LENGTH"
+              value={profile.boat_length ? `${profile.boat_length} ft` : 'N/A'}
+            />
+          </>
         )}
 
         <Pressable style={styles.editButton} onPress={() => setSettingsOpen(true)}>
@@ -614,169 +506,175 @@ export default function ProfileScreen() {
           <Text style={styles.blockedUsersButtonText}>BLOCKED USERS</Text>
         </Pressable>
 
-        {/* DELETE ACCOUNT */}
-        <Pressable 
-          style={styles.deleteAccountButton} 
-          onPress={handleDeleteAccount}
-          disabled={deleting}
-        >
-          <Text style={styles.deleteAccountText}>
-            {deleting ? 'DELETING...' : 'DELETE ACCOUNT'}
-          </Text>
+        <Pressable style={styles.deleteAccountButton} onPress={handleDeleteAccount} disabled={deleting}>
+          <Text style={styles.deleteAccountText}>{deleting ? 'DELETING...' : 'DELETE ACCOUNT'}</Text>
         </Pressable>
       </ScrollView>
 
-      {/* EDIT PROFILE MODAL */}
+      {/* ── EDIT PROFILE MODAL ─────────────────────────────────────────────── */}
       <Modal visible={settingsOpen} transparent animationType="slide" onRequestClose={() => setSettingsOpen(false)}>
-        <View style={styles.settingsBackdrop}>
-          <View style={styles.settingsCard}>
-            <View style={styles.settingsHeader}>
-              <Text style={styles.settingsTitle}>EDIT PROFILE</Text>
-              <CloseButton onPress={() => setSettingsOpen(false)} iconName="chevron-down" />
-            </View>
-            
-            <ScrollView contentContainerStyle={styles.settingsContent}>
-              <Text style={styles.label}>PROFILE PHOTO</Text>
-              <View style={styles.modalPhotoSection}>
-                <Pressable onPress={pickImage} disabled={uploadingPhoto}>
-                  {profile.profile_photo_url ? (
-                    <Image source={{ uri: profile.profile_photo_url }} style={styles.modalProfilePhoto} />
-                  ) : (
-                    <View style={styles.modalProfilePhotoPlaceholder}>
-                      <Text style={styles.modalPhotoPlaceholderText}>+</Text>
-                    </View>
-                  )}
-                </Pressable>
-                <Pressable style={styles.modalChangePhotoButton} onPress={pickImage} disabled={uploadingPhoto}>
-                  <Text style={styles.modalChangePhotoText}>
-                    {uploadingPhoto ? 'UPLOADING...' : profile.profile_photo_url ? 'CHANGE' : 'ADD PHOTO'}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.settingsBackdrop}>
+            <View style={styles.settingsCard}>
+              <View style={styles.settingsHeader}>
+                <Text style={styles.settingsTitle}>EDIT PROFILE</Text>
+                <CloseButton onPress={() => setSettingsOpen(false)} iconName="chevron-down" />
+              </View>
+
+              <ScrollView contentContainerStyle={styles.settingsContent} keyboardShouldPersistTaps="handled">
+
+                {/* Photo */}
+                <Text style={styles.label}>PROFILE PHOTO</Text>
+                <View style={styles.modalPhotoSection}>
+                  <Pressable onPress={pickImage} disabled={uploadingPhoto}>
+                    {profile.profile_photo_url ? (
+                      <Image source={{ uri: profile.profile_photo_url }} style={styles.modalProfilePhoto} />
+                    ) : (
+                      <View style={styles.modalProfilePhotoPlaceholder}>
+                        <Text style={styles.modalPhotoPlaceholderText}>+</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                  <Pressable style={styles.modalChangePhotoButton} onPress={pickImage} disabled={uploadingPhoto}>
+                    <Text style={styles.modalChangePhotoText}>
+                      {uploadingPhoto ? 'UPLOADING...' : profile.profile_photo_url ? 'CHANGE' : 'ADD PHOTO'}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {/* Display name */}
+                <Text style={styles.label}>DISPLAY NAME</Text>
+                <TextInput
+                  placeholder="What should people call you?"
+                  placeholderTextColor={FishingTheme.colors.text.muted}
+                  value={profile.display_name}
+                  onChangeText={(v) => setProfile(p => ({ ...p, display_name: v }))}
+                  style={styles.input}
+                />
+
+                {/* Bio */}
+                <Text style={styles.label}>BIO</Text>
+                <TextInput
+                  placeholder="Tell people about your fishing style..."
+                  placeholderTextColor={FishingTheme.colors.text.muted}
+                  value={profile.bio}
+                  onChangeText={(v) => setProfile(p => ({ ...p, bio: v }))}
+                  style={[styles.input, styles.textArea]}
+                  multiline
+                />
+
+                {/* Home port */}
+                <Text style={styles.label}>HOME PORT</Text>
+                <TextInput
+                  placeholder="e.g. Point Judith, RI"
+                  placeholderTextColor={FishingTheme.colors.text.muted}
+                  value={profile.home_port}
+                  onChangeText={(v) => setProfile(p => ({ ...p, home_port: v }))}
+                  style={styles.input}
+                />
+
+                {/* Age */}
+                <Text style={styles.label}>AGE</Text>
+                <TextInput
+                  placeholder="Your age"
+                  placeholderTextColor={FishingTheme.colors.text.muted}
+                  value={profile.age}
+                  onChangeText={(v) => setProfile(p => ({ ...p, age: v }))}
+                  style={styles.input}
+                  keyboardType="numeric"
+                />
+
+                {/* Location */}
+                <Text style={styles.label}>LOCATION</Text>
+                <TextInput
+                  placeholder="City, State"
+                  placeholderTextColor={FishingTheme.colors.text.muted}
+                  value={profile.location}
+                  onChangeText={(v) => setProfile(p => ({ ...p, location: v }))}
+                  style={styles.input}
+                />
+
+                {/* Experience level */}
+                <Text style={styles.label}>EXPERIENCE LEVEL</Text>
+                <View style={styles.chipsWrap}>
+                  {(['Beginner', 'Intermediate', 'Advanced'] as const).map(level => {
+                    const active = profile.experience_level === level;
+                    return (
+                      <Pressable
+                        key={level}
+                        onPress={() => setProfile(p => ({ ...p, experience_level: level }))}
+                        style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}
+                      >
+                        <Text style={active ? styles.chipTextActive : styles.chipTextIdle}>{level}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                {/* Has boat */}
+                <Text style={styles.label}>HAS BOAT</Text>
+                <Pressable
+                  onPress={() => setProfile(p => ({ ...p, has_boat: !p.has_boat }))}
+                  style={[styles.chip, profile.has_boat ? styles.chipActive : styles.chipIdle, { alignSelf: 'flex-start' }]}
+                >
+                  <Text style={profile.has_boat ? styles.chipTextActive : styles.chipTextIdle}>
+                    {profile.has_boat ? 'Yes, I have a boat' : 'No boat'}
                   </Text>
                 </Pressable>
-              </View>
 
-              <Text style={styles.label}>DISPLAY NAME</Text>
-              <TextInput
-                placeholder="What should people call you?"
-                placeholderTextColor={FishingTheme.colors.text.muted}
-                value={profile.display_name}
-                onChangeText={(v) => setProfile(p => ({ ...p, display_name: v }))}
-                style={styles.input}
-              />
+                {/* Boat type — unified list, always the same */}
+                <Text style={styles.label}>BOAT TYPE</Text>
+                <View style={styles.chipsWrap}>
+                  {BOAT_TYPES.map(type => {
+                    const active = profile.boat_type === type;
+                    return (
+                      <Pressable
+                        key={type}
+                        onPress={() => setProfile(p => ({ ...p, boat_type: type }))}
+                        style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}
+                      >
+                        <Text style={active ? styles.chipTextActive : styles.chipTextIdle}>{type}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
 
-              <Text style={styles.label}>BIO</Text>
-              <TextInput
-                placeholder="Tell people about your fishing style..."
-                placeholderTextColor={FishingTheme.colors.text.muted}
-                value={profile.bio}
-                onChangeText={(v) => setProfile(p => ({ ...p, bio: v }))}
-                style={[styles.input, styles.textArea]}
-                multiline
-              />
+                {/* Boat length — numeric text input */}
+                <Text style={styles.label}>BOAT LENGTH</Text>
+                <TextInput
+                  placeholder="Enter boat length in feet"
+                  placeholderTextColor={FishingTheme.colors.text.muted}
+                  value={boatLengthInput}
+                  onChangeText={handleBoatLengthChange}
+                  style={styles.input}
+                  keyboardType="number-pad"
+                  maxLength={3}
+                  returnKeyType="done"
+                />
+                {boatLengthInput !== '' && (
+                  <Text style={styles.boatLengthPreview}>{boatLengthInput} ft</Text>
+                )}
 
-              <Text style={styles.label}>HOME PORT</Text>
-              <TextInput
-                placeholder={fishingType === 'freshwater' ? "e.g., Lake George, NY" : "e.g., Point Judith, RI"}
-                placeholderTextColor={FishingTheme.colors.text.muted}
-                value={profile.home_port}
-                onChangeText={(v) => setProfile(p => ({ ...p, home_port: v }))}
-                style={styles.input}
-              />
+                <View style={styles.settingsFooter}>
+                  <Pressable
+                    onPress={saveProfile}
+                    style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+                    disabled={saving}
+                  >
+                    <Text style={styles.saveBtnText}>{saving ? 'SAVING...' : 'SAVE PROFILE'}</Text>
+                  </Pressable>
+                </View>
 
-              <Text style={styles.label}>AGE</Text>
-              <TextInput
-                placeholder="Your age"
-                placeholderTextColor={FishingTheme.colors.text.muted}
-                value={profile.age}
-                onChangeText={(v) => setProfile(p => ({ ...p, age: v }))}
-                style={styles.input}
-                keyboardType="numeric"
-              />
-
-              <Text style={styles.label}>LOCATION</Text>
-              <TextInput
-                placeholder="City, State"
-                placeholderTextColor={FishingTheme.colors.text.muted}
-                value={profile.location}
-                onChangeText={(v) => setProfile(p => ({ ...p, location: v }))}
-                style={styles.input}
-              />
-
-              <Text style={styles.label}>EXPERIENCE LEVEL</Text>
-              <View style={styles.chipsWrap}>
-                {(['Beginner', 'Intermediate', 'Advanced'] as const).map(level => {
-                  const active = profile.experience_level === level;
-                  return (
-                    <Pressable 
-                      key={level} 
-                      onPress={() => setProfile(p => ({ ...p, experience_level: level }))} 
-                      style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}
-                    >
-                      <Text style={active ? styles.chipTextActive : styles.chipTextIdle}>{level}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <Text style={styles.label}>HAS BOAT</Text>
-              <Pressable 
-                onPress={() => setProfile(p => ({ ...p, has_boat: !p.has_boat }))}
-                style={[styles.chip, profile.has_boat ? styles.chipActive : styles.chipIdle]}
-              >
-                <Text style={profile.has_boat ? styles.chipTextActive : styles.chipTextIdle}>
-                  {profile.has_boat ? 'Yes, I have a boat' : 'No boat'}
-                </Text>
-              </Pressable>
-
-              <Text style={styles.label}>BOAT TYPE</Text>
-              <View style={styles.chipsWrap}>
-                {(fishingType === 'freshwater' 
-                  ? ['Bass Boat', 'Jon Boat', 'Pontoon', 'Kayak', 'Canoe', 'Other']
-                  : ['Center Console', 'Sportfisher', 'Bay Boat', 'Flats Boat', 'Charter Boat', 'Other']
-                ).map(type => {
-                  const active = profile.boat_type === type;
-                  return (
-                    <Pressable 
-                      key={type} 
-                      onPress={() => setProfile(p => ({ ...p, boat_type: type }))} 
-                      style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}
-                    >
-                      <Text style={active ? styles.chipTextActive : styles.chipTextIdle}>{type}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <Text style={styles.label}>BOAT LENGTH</Text>
-              <View style={styles.chipsWrap}>
-                {['Under 20ft', '20-25ft', '26-30ft', '31-35ft', '36-40ft', '40ft+'].map(length => {
-                  const active = profile.boat_length === length;
-                  return (
-                    <Pressable 
-                      key={length} 
-                      onPress={() => setProfile(p => ({ ...p, boat_length: length }))} 
-                      style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}
-                    >
-                      <Text style={active ? styles.chipTextActive : styles.chipTextIdle}>{length}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <View style={styles.settingsFooter}>
-                <Pressable 
-                  onPress={saveProfile} 
-                  style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
-                  disabled={saving}
-                >
-                  <Text style={styles.saveBtnText}>{saving ? 'SAVING...' : 'SAVE PROFILE'}</Text>
-                </Pressable>
-              </View>
-            </ScrollView>
+              </ScrollView>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
-      {/* BLOCKED USERS MODAL */}
+      {/* ── BLOCKED USERS MODAL ────────────────────────────────────────────── */}
       <Modal visible={blockedModalOpen} transparent animationType="slide" onRequestClose={() => setBlockedModalOpen(false)}>
         <View style={styles.settingsBackdrop}>
           <View style={styles.blockedCard}>
@@ -830,434 +728,95 @@ export default function ProfileScreen() {
   );
 }
 
+// ── Small helper component ─────────────────────────────────────────────────────
+function ProfileRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.profileSection}>
+      <Text style={styles.profileLabel}>{label}</Text>
+      <Text style={styles.profileValue}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: FishingTheme.colors.background },
   centered: { justifyContent: 'center', alignItems: 'center', padding: 20 },
-  
-  logoBox: {
-    width: 80,
-    height: 80,
-    backgroundColor: FishingTheme.colors.darkGreen,
-    borderRadius: 16,
-    borderWidth: 3,
-    borderColor: FishingTheme.colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  logoText: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: FishingTheme.colors.cream,
-    letterSpacing: 2,
-  },
-  
+
+  logoBox: { width: 80, height: 80, backgroundColor: FishingTheme.colors.darkGreen, borderRadius: 16, borderWidth: 3, borderColor: FishingTheme.colors.border, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  logoText: { fontSize: 32, fontWeight: '800', color: FishingTheme.colors.cream, letterSpacing: 2 },
+
   profileContent: { padding: 20, gap: 20 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-  sectionTitle: { 
-    color: FishingTheme.colors.darkGreen, 
-    fontSize: 24, 
-    fontWeight: '800', 
-    marginBottom: 8,
-    letterSpacing: 1,
-  },
-  
-  fishingTypeBadge: { 
-    backgroundColor: FishingTheme.colors.card, 
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.border,
-    alignSelf: 'flex-start',
-  },
-  fishingTypeText: { 
-    color: FishingTheme.colors.darkGreen, 
-    fontSize: 11, 
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
+  sectionTitle: { color: FishingTheme.colors.darkGreen, fontSize: 24, fontWeight: '800', marginBottom: 8, letterSpacing: 1 },
 
-  photoSection: {
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  profilePhoto: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 3,
-    borderColor: FishingTheme.colors.darkGreen,
-  },
-  profilePhotoPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: FishingTheme.colors.sageGreen,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: FishingTheme.colors.darkGreen,
-  },
-  photoPlaceholderText: {
-    fontSize: 48,
-    fontWeight: '800',
-    color: FishingTheme.colors.cream,
-  },
-  photoButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
-  },
-  changePhotoButton: {
-    backgroundColor: FishingTheme.colors.darkGreen,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.forestGreen,
-  },
-  changePhotoText: {
-    color: FishingTheme.colors.cream,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  removePhotoButton: {
-    backgroundColor: FishingTheme.colors.card,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.status.poor,
-  },
-  removePhotoText: {
-    color: FishingTheme.colors.status.poor,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
+  photoSection: { alignItems: 'center', marginBottom: 10 },
+  profilePhoto: { width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: FishingTheme.colors.darkGreen },
+  profilePhotoPlaceholder: { width: 120, height: 120, borderRadius: 60, backgroundColor: FishingTheme.colors.sageGreen, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: FishingTheme.colors.darkGreen },
+  photoPlaceholderText: { fontSize: 48, fontWeight: '800', color: FishingTheme.colors.cream },
+  photoButtons: { flexDirection: 'row', gap: 12, marginTop: 12 },
+  changePhotoButton: { backgroundColor: FishingTheme.colors.darkGreen, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 2, borderColor: FishingTheme.colors.forestGreen },
+  changePhotoText: { color: FishingTheme.colors.cream, fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  removePhotoButton: { backgroundColor: FishingTheme.colors.card, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 2, borderColor: FishingTheme.colors.status.poor },
+  removePhotoText: { color: FishingTheme.colors.status.poor, fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
 
-  modalPhotoSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    marginBottom: 8,
-  },
-  modalProfilePhoto: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.darkGreen,
-  },
-  modalProfilePhotoPlaceholder: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: FishingTheme.colors.sageGreen,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.darkGreen,
-  },
-  modalPhotoPlaceholderText: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: FishingTheme.colors.cream,
-  },
-  modalChangePhotoButton: {
-    backgroundColor: FishingTheme.colors.card,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.darkGreen,
-  },
-  modalChangePhotoText: {
-    color: FishingTheme.colors.darkGreen,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  
+  modalPhotoSection: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 8 },
+  modalProfilePhoto: { width: 70, height: 70, borderRadius: 35, borderWidth: 2, borderColor: FishingTheme.colors.darkGreen },
+  modalProfilePhotoPlaceholder: { width: 70, height: 70, borderRadius: 35, backgroundColor: FishingTheme.colors.sageGreen, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: FishingTheme.colors.darkGreen },
+  modalPhotoPlaceholderText: { fontSize: 28, fontWeight: '700', color: FishingTheme.colors.cream },
+  modalChangePhotoButton: { backgroundColor: FishingTheme.colors.card, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 2, borderColor: FishingTheme.colors.darkGreen },
+  modalChangePhotoText: { color: FishingTheme.colors.darkGreen, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+
   profileSection: { gap: 8 },
-  profileLabel: { 
-    fontSize: 11, 
-    color: FishingTheme.colors.text.tertiary, 
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
+  profileLabel: { fontSize: 11, color: FishingTheme.colors.text.tertiary, fontWeight: '700', letterSpacing: 0.5 },
   profileValue: { fontSize: 16, color: FishingTheme.colors.text.primary, fontWeight: '500' },
-  
+
   loadingText: { color: FishingTheme.colors.text.primary, fontSize: 16 },
-  signInText: { 
-    color: FishingTheme.colors.text.secondary, 
-    fontSize: 16, 
-    textAlign: 'center', 
-    marginBottom: 20, 
-    lineHeight: 22,
-    maxWidth: 300,
-  },
-  signInButton: { 
-    backgroundColor: FishingTheme.colors.darkGreen, 
-    paddingHorizontal: 24, 
-    paddingVertical: 12, 
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.forestGreen,
-  },
-  signInButtonText: { 
-    color: FishingTheme.colors.cream, 
-    fontWeight: '800', 
-    fontSize: 16,
-    letterSpacing: 0.5,
-  },
-  signOutButton: { 
-    backgroundColor: FishingTheme.colors.status.poor, 
-    paddingHorizontal: 12, 
-    paddingVertical: 8, 
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.border,
-  },
-  signOutText: { 
-    color: FishingTheme.colors.cream, 
-    fontSize: 11, 
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  errorText: { 
-    color: FishingTheme.colors.status.poor, 
-    fontSize: 14, 
-    textAlign: 'center', 
-    marginBottom: 16, 
-    paddingHorizontal: 20 
-  },
-  
-  editButton: {
-    backgroundColor: FishingTheme.colors.darkGreen,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginTop: 20,
-    alignSelf: 'center',
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.forestGreen,
-  },
-  editButtonText: { 
-    color: FishingTheme.colors.cream, 
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
+  signInText: { color: FishingTheme.colors.text.secondary, fontSize: 16, textAlign: 'center', marginBottom: 20, lineHeight: 22, maxWidth: 300 },
+  signInButton: { backgroundColor: FishingTheme.colors.darkGreen, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12, borderWidth: 2, borderColor: FishingTheme.colors.forestGreen },
+  signInButtonText: { color: FishingTheme.colors.cream, fontWeight: '800', fontSize: 16, letterSpacing: 0.5 },
+  signOutButton: { backgroundColor: FishingTheme.colors.status.poor, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 2, borderColor: FishingTheme.colors.border },
+  signOutText: { color: FishingTheme.colors.cream, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  errorText: { color: FishingTheme.colors.status.poor, fontSize: 14, textAlign: 'center', marginBottom: 16, paddingHorizontal: 20 },
 
-  // Blocked Users Button
-  blockedUsersButton: {
-    backgroundColor: FishingTheme.colors.card,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    alignSelf: 'center',
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.border,
-  },
-  blockedUsersButtonText: {
-    color: FishingTheme.colors.text.secondary,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
+  editButton: { backgroundColor: FishingTheme.colors.darkGreen, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, marginTop: 20, alignSelf: 'center', borderWidth: 2, borderColor: FishingTheme.colors.forestGreen },
+  editButtonText: { color: FishingTheme.colors.cream, fontWeight: '800', letterSpacing: 0.5 },
+  blockedUsersButton: { backgroundColor: FishingTheme.colors.card, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, alignSelf: 'center', borderWidth: 2, borderColor: FishingTheme.colors.border },
+  blockedUsersButtonText: { color: FishingTheme.colors.text.secondary, fontWeight: '800', letterSpacing: 0.5 },
+  deleteAccountButton: { backgroundColor: 'transparent', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, alignSelf: 'center', borderWidth: 2, borderColor: '#CC3333', marginTop: 8 },
+  deleteAccountText: { color: '#CC3333', fontWeight: '800', fontSize: 13, letterSpacing: 0.5 },
 
-  // Delete Account
-  deleteAccountButton: {
-    backgroundColor: 'transparent',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    alignSelf: 'center',
-    borderWidth: 2,
-    borderColor: '#CC3333',
-    marginTop: 8,
-  },
-  deleteAccountText: {
-    color: '#CC3333',
-    fontWeight: '800',
-    fontSize: 13,
-    letterSpacing: 0.5,
-  },
-
-  // Blocked Users Modal
-  blockedCard: {
-    backgroundColor: FishingTheme.colors.cream,
-    borderRadius: 18,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.darkGreen,
-    maxHeight: '70%',
-  },
-  blockedLoading: {
-    padding: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  blockedEmpty: {
-    padding: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  blockedEmptyText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: FishingTheme.colors.darkGreen,
-  },
-  blockedEmptySubtext: {
-    fontSize: 13,
-    color: FishingTheme.colors.text.secondary,
-    marginTop: 8,
-  },
-  blockedList: {
-    padding: 16,
-  },
-  blockedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: FishingTheme.colors.border,
-  },
-  blockedUserInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  blockedAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  blockedAvatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: FishingTheme.colors.sageGreen,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  blockedAvatarInitial: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  blockedName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: FishingTheme.colors.darkGreen,
-  },
-  unblockBtn: {
-    backgroundColor: FishingTheme.colors.card,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: FishingTheme.colors.darkGreen,
-  },
-  unblockBtnText: {
-    color: FishingTheme.colors.darkGreen,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  
-  settingsBackdrop: { 
-    flex: 1, 
-    backgroundColor: FishingTheme.colors.overlay, 
-    justifyContent: 'center', 
-    padding: 16 
-  },
-  settingsCard: { 
-    backgroundColor: FishingTheme.colors.cream, 
-    borderRadius: 18, 
-    overflow: 'hidden', 
-    borderWidth: 2, 
-    borderColor: FishingTheme.colors.darkGreen, 
-    maxHeight: '86%' 
-  },
-  settingsHeader: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: 16, 
-    paddingVertical: 12, 
-    borderBottomWidth: 2, 
-    borderBottomColor: FishingTheme.colors.border 
-  },
-  settingsTitle: { 
-    color: FishingTheme.colors.darkGreen, 
-    fontSize: 18, 
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
+  settingsBackdrop: { flex: 1, backgroundColor: FishingTheme.colors.overlay, justifyContent: 'center', padding: 16 },
+  settingsCard: { backgroundColor: FishingTheme.colors.cream, borderRadius: 18, overflow: 'hidden', borderWidth: 2, borderColor: FishingTheme.colors.darkGreen, maxHeight: '86%' },
+  settingsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: FishingTheme.colors.border },
+  settingsTitle: { color: FishingTheme.colors.darkGreen, fontSize: 18, fontWeight: '800', letterSpacing: 1 },
   settingsContent: { padding: 16, gap: 10 },
-  label: { 
-    color: FishingTheme.colors.text.tertiary, 
-    fontSize: 11, 
-    marginTop: 6,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  input: { 
-    backgroundColor: FishingTheme.colors.card, 
-    color: FishingTheme.colors.text.primary, 
-    borderRadius: 12, 
-    paddingHorizontal: 12, 
-    paddingVertical: 10, 
-    borderWidth: 2, 
-    borderColor: FishingTheme.colors.border,
-    fontSize: 15,
-  },
+  label: { color: FishingTheme.colors.text.tertiary, fontSize: 11, marginTop: 6, fontWeight: '700', letterSpacing: 0.5 },
+  input: { backgroundColor: FishingTheme.colors.card, color: FishingTheme.colors.text.primary, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 2, borderColor: FishingTheme.colors.border, fontSize: 15 },
   textArea: { height: 80, textAlignVertical: 'top' },
+  boatLengthPreview: { fontSize: 13, fontWeight: '700', color: FishingTheme.colors.darkGreen, marginTop: 4, marginLeft: 2 },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  chip: { 
-    paddingHorizontal: 10, 
-    paddingVertical: 8, 
-    borderRadius: 999, 
-    borderWidth: 2 
-  },
-  chipIdle: { 
-    backgroundColor: FishingTheme.colors.card, 
-    borderColor: FishingTheme.colors.border 
-  },
-  chipActive: { 
-    backgroundColor: FishingTheme.colors.darkGreen, 
-    borderColor: FishingTheme.colors.darkGreen 
-  },
-  chipTextIdle: { 
-    color: FishingTheme.colors.text.secondary, 
-    fontWeight: '600', 
-    fontSize: 12 
-  },
-  chipTextActive: { 
-    color: FishingTheme.colors.cream, 
-    fontWeight: '800', 
-    fontSize: 12,
-    letterSpacing: 0.3,
-  },
+  chip: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, borderWidth: 2 },
+  chipIdle: { backgroundColor: FishingTheme.colors.card, borderColor: FishingTheme.colors.border },
+  chipActive: { backgroundColor: FishingTheme.colors.darkGreen, borderColor: FishingTheme.colors.darkGreen },
+  chipTextIdle: { color: FishingTheme.colors.text.secondary, fontWeight: '600', fontSize: 12 },
+  chipTextActive: { color: FishingTheme.colors.cream, fontWeight: '800', fontSize: 12, letterSpacing: 0.3 },
   settingsFooter: { padding: 12, borderTopWidth: 2, borderTopColor: FishingTheme.colors.border },
-  saveBtn: { 
-    alignSelf: 'flex-end', 
-    backgroundColor: FishingTheme.colors.darkGreen, 
-    borderRadius: 12, 
-    paddingHorizontal: 16, 
-    paddingVertical: 10, 
-    borderWidth: 2, 
-    borderColor: FishingTheme.colors.forestGreen 
-  },
+  saveBtn: { alignSelf: 'flex-end', backgroundColor: FishingTheme.colors.darkGreen, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 2, borderColor: FishingTheme.colors.forestGreen },
   saveBtnDisabled: { opacity: 0.5 },
-  saveBtnText: { 
-    color: FishingTheme.colors.cream, 
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
+  saveBtnText: { color: FishingTheme.colors.cream, fontWeight: '800', letterSpacing: 0.5 },
+
+  blockedCard: { backgroundColor: FishingTheme.colors.cream, borderRadius: 18, overflow: 'hidden', borderWidth: 2, borderColor: FishingTheme.colors.darkGreen, maxHeight: '70%' },
+  blockedLoading: { padding: 40, justifyContent: 'center', alignItems: 'center' },
+  blockedEmpty: { padding: 40, justifyContent: 'center', alignItems: 'center' },
+  blockedEmptyText: { fontSize: 16, fontWeight: '800', color: FishingTheme.colors.darkGreen },
+  blockedEmptySubtext: { fontSize: 13, color: FishingTheme.colors.text.secondary, marginTop: 8 },
+  blockedList: { padding: 16 },
+  blockedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: FishingTheme.colors.border },
+  blockedUserInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  blockedAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 12 },
+  blockedAvatarPlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: FishingTheme.colors.sageGreen, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  blockedAvatarInitial: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+  blockedName: { fontSize: 15, fontWeight: '700', color: FishingTheme.colors.darkGreen },
+  unblockBtn: { backgroundColor: FishingTheme.colors.card, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1.5, borderColor: FishingTheme.colors.darkGreen },
+  unblockBtnText: { color: FishingTheme.colors.darkGreen, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
 });

@@ -1,21 +1,22 @@
 import { useFishing } from '@/contexts/FishingContext';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Dimensions,
   Image,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BuddyCardSkeleton } from '../../components/Skeletons';
 import { FishingTheme } from '../../constants/FishingTheme';
 import { getPotentialMatches, startConversation, UserProfile } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
@@ -25,6 +26,89 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const EXPERIENCE_OPTIONS = ['all', 'Beginner', 'Intermediate', 'Advanced'] as const;
 type ExperienceFilter = typeof EXPERIENCE_OPTIONS[number];
 
+const FISHING_TYPE_OPTIONS = ['all', 'freshwater', 'saltwater'] as const;
+type FishingTypeFilter = typeof FISHING_TYPE_OPTIONS[number];
+
+// ── Slider ────────────────────────────────────────────────────────────────────
+const SLIDER_MIN = 1;
+const SLIDER_MAX = 100;
+const SLIDER_TRACK_PADDING = 20;
+
+function DistanceSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const trackWidth = SCREEN_WIDTH - 80 - SLIDER_TRACK_PADDING * 2;
+  const valueToX = (v: number) => ((v - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * trackWidth;
+  const xToValue = (x: number) => {
+    const ratio = Math.max(0, Math.min(1, x / trackWidth));
+    return Math.round(SLIDER_MIN + ratio * (SLIDER_MAX - SLIDER_MIN));
+  };
+  const panResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: (e) => onChange(xToValue(e.nativeEvent.locationX - SLIDER_TRACK_PADDING)),
+    onPanResponderMove: (e) => onChange(xToValue(e.nativeEvent.locationX - SLIDER_TRACK_PADDING)),
+  });
+  const thumbX = valueToX(value);
+  const label = value >= SLIDER_MAX ? '100+ mi' : `${value} mi`;
+  return (
+    <View style={sliderStyles.container} {...panResponder.panHandlers}>
+      <View style={[sliderStyles.track, { width: trackWidth + SLIDER_TRACK_PADDING * 2 }]}>
+        <View style={[sliderStyles.filled, { width: thumbX + SLIDER_TRACK_PADDING }]} />
+        <View style={[sliderStyles.thumb, { left: thumbX + SLIDER_TRACK_PADDING - 12 }]}>
+          <Text style={sliderStyles.thumbLabel}>{label}</Text>
+        </View>
+      </View>
+      <View style={sliderStyles.labels}>
+        <Text style={sliderStyles.labelText}>1 mi</Text>
+        <Text style={sliderStyles.labelText}>100+ mi</Text>
+      </View>
+    </View>
+  );
+}
+
+// ── Swipeable card ────────────────────────────────────────────────────────────
+function SwipeableCard({
+  onSwipeLeft,
+  onSwipeRight,
+  children,
+}: {
+  onSwipeLeft: () => void;
+  onSwipeRight: () => void;
+  children: React.ReactNode;
+}) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.3;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy),
+      onPanResponderMove: (_, gs) => translateX.setValue(gs.dx),
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dx < -SWIPE_THRESHOLD) {
+          Animated.timing(translateX, { toValue: -SCREEN_WIDTH, duration: 220, useNativeDriver: true }).start(() => {
+            translateX.setValue(0);
+            onSwipeLeft();
+          });
+        } else if (gs.dx > SWIPE_THRESHOLD) {
+          Animated.timing(translateX, { toValue: SCREEN_WIDTH, duration: 220, useNativeDriver: true }).start(() => {
+            translateX.setValue(0);
+            onSwipeRight();
+          });
+        } else {
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
+        }
+      },
+    })
+  ).current;
+
+  return (
+    <Animated.View style={[{ flex: 1 }, { transform: [{ translateX }] }]} {...panResponder.panHandlers}>
+      {children}
+    </Animated.View>
+  );
+}
+
+// ── Main screen ───────────────────────────────────────────────────────────────
 export default function FeedsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -33,88 +117,63 @@ export default function FeedsScreen() {
   const [buddies, setBuddies] = useState<UserProfile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [cardLoading, setCardLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [filterDistance, setFilterDistance] = useState(25);
+  const [filterDistance, setFilterDistance] = useState(SLIDER_MAX);
   const [filterHasBoat, setFilterHasBoat] = useState(false);
   const [filterExperience, setFilterExperience] = useState<ExperienceFilter>('all');
+  const [filterFishingType, setFilterFishingType] = useState<FishingTypeFilter>('all');
 
-  useEffect(() => {
-    loadInitialData();
-  }, [fishingType]);
+  useEffect(() => { loadInitialData(); }, [fishingType]);
 
   async function loadInitialData() {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        setLoading(false);
-        return;
-      }
-
+      if (!session?.user) { setLoading(false); return; }
       setCurrentUserId(session.user.id);
-
       try {
         const matches = await getPotentialMatches(session.user.id, {
-          fishingType: fishingType || undefined,
-          maxDistance: filterDistance,
+          fishingType: filterFishingType !== 'all' ? filterFishingType : undefined,
+          maxDistance: filterDistance < SLIDER_MAX ? filterDistance : undefined,
           hasBoat: filterHasBoat || undefined,
-          experienceLevel: filterExperience !== 'all' ? filterExperience : undefined
+          experienceLevel: filterExperience !== 'all' ? filterExperience : undefined,
         });
         setBuddies(matches || []);
-      } catch (apiError) {
-        console.warn("API Error:", apiError);
+      } catch (e) {
+        console.warn('API Error:', e);
         setBuddies([]);
       }
-
       setCurrentIndex(0);
-    } catch (error) {
-      console.error('Session Error:', error);
+    } catch (e) {
+      console.error('Session Error:', e);
     } finally {
       setLoading(false);
     }
   }
 
-  const handleApplyFilters = () => {
-    setIsModalVisible(false);
-    loadInitialData();
-  };
+  const handleApplyFilters = () => { setIsModalVisible(false); loadInitialData(); };
 
   const handleStartChat = async (buddy: UserProfile) => {
     if (!currentUserId) return;
     try {
       const conv = await startConversation(currentUserId, buddy.id);
-      router.push({
-        pathname: "/conversation/[id]",
-        params: {
-          id: conv.id,
-          name: buddy.display_name || 'Fisherman',
-          photo: buddy.profile_photo_url || ''
-        }
-      });
-    } catch (error) {
-      console.error(error);
+      router.push({ pathname: '/conversation/[id]', params: { id: conv.id, name: buddy.display_name || 'Fisherman', photo: buddy.profile_photo_url || '' } });
+    } catch {
       Alert.alert('Error', 'Could not start conversation');
     }
   };
 
-  async function goToPrev() {
-    if (currentIndex === 0) return;
-    setCardLoading(true);
-    await new Promise(res => setTimeout(res, 400));
-    setCurrentIndex(prev => Math.max(0, prev - 1));
-    setCardLoading(false);
-  }
+  const goToNext = () => { if (currentIndex < buddies.length) setCurrentIndex(p => p + 1); };
+  const goToPrev = () => { if (currentIndex > 0) setCurrentIndex(p => p - 1); };
 
-  async function goToNext() {
-    if (currentIndex === buddies.length - 1) return;
-    setCardLoading(true);
-    await new Promise(res => setTimeout(res, 400));
-    setCurrentIndex(prev => Math.min(buddies.length - 1, prev + 1));
-    setCardLoading(false);
-  }
+  const activeFilterSummary = [
+    filterDistance < SLIDER_MAX ? `${filterDistance}mi` : '100+mi',
+    filterFishingType !== 'all' ? (filterFishingType === 'freshwater' ? 'Fresh' : 'Salt') : null,
+    filterExperience !== 'all' ? filterExperience : null,
+    filterHasBoat ? 'Has boat' : null,
+  ].filter(Boolean).join(' • ') || 'None';
 
   if (loading) return (
     <View style={styles.centered}>
@@ -127,148 +186,146 @@ export default function FeedsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
 
-      {/* HEADER */}
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View>
             <Text style={styles.headerTitle}>FISHING BUDDIES</Text>
             <Text style={styles.headerSubtitle}>{buddies.length} nearby anglers</Text>
           </View>
-          <Pressable
-            style={({ pressed }) => [styles.filterBtn, pressed && { opacity: 0.7 }]}
-            onPress={() => setIsModalVisible(true)}
-          >
+          <Pressable style={({ pressed }) => [styles.filterBtn, pressed && { opacity: 0.7 }]} onPress={() => setIsModalVisible(true)}>
             <Text style={styles.filterBtnText}>FILTERS</Text>
           </Pressable>
         </View>
       </View>
 
-      {/* MAIN FEED */}
+      {/* Feed */}
       <View style={styles.main}>
-        {currentBuddy ? (
-          <View style={styles.card}>
+        {buddies.length === 0 ? (
+          <View style={styles.centered}>
+            <Text style={styles.emptyText}>No buddies found.</Text>
+            <Text style={styles.emptySubtext}>Try broadening your filters.</Text>
+          </View>
+        ) : currentBuddy ? (
+          <SwipeableCard onSwipeLeft={goToNext} onSwipeRight={goToPrev}>
+            <View style={styles.card}>
 
-            {cardLoading ? (
-              <BuddyCardSkeleton />
-            ) : (
-              <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-
-                {/* Photo with overlay */}
-                <View style={styles.photoContainer}>
-                  {currentBuddy.profile_photo_url ? (
-                    <Image
-                      source={{ uri: currentBuddy.profile_photo_url }}
-                      style={styles.photo}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={styles.placeholder}>
-                      <Text style={styles.placeholderText}>NO PHOTO</Text>
-                    </View>
-                  )}
-
-                  <View style={styles.photoOverlay}>
-                    <Text style={styles.overlayName}>
-                      {currentBuddy.display_name || 'Anonymous'}
-                    </Text>
-                    <Text style={styles.overlayFieldLabel}>Location</Text>
-                    <Text style={styles.overlayLocation}>
-                      {currentBuddy.home_port || 'Unknown location'}
-                    </Text>
+              {/* Photo */}
+              <View style={styles.photoContainer}>
+                {currentBuddy.profile_photo_url ? (
+                  <Image source={{ uri: currentBuddy.profile_photo_url }} style={styles.photo} resizeMode="cover" />
+                ) : (
+                  <View style={styles.placeholder}>
+                    <Text style={styles.placeholderText}>NO PHOTO</Text>
                   </View>
+                )}
+
+                {/* Name + location — no shade bar, drop shadow only */}
+                <View style={styles.photoTextBlock}>
+                  <Text style={styles.overlayName}>
+                    {currentBuddy.display_name || 'Anonymous'}
+                  </Text>
+                  {currentBuddy.home_port ? (
+                    <View style={styles.locationRow}>
+                      <Ionicons name="location-outline" size={13} color="white" style={styles.pinIcon} />
+                      <Text style={styles.overlayLocation}>{currentBuddy.home_port}</Text>
+                    </View>
+                  ) : null}
                 </View>
 
-                {/* Details */}
-                <View style={styles.details}>
-                  <Text style={styles.bio}>
-                    {currentBuddy.bio || "No bio yet. Ready to fish!"}
-                  </Text>
+                {/* Progress dots */}
+                {buddies.length > 1 && (
+                  <View style={styles.dotsRow}>
+                    {buddies.map((_, i) => (
+                      <View key={i} style={[styles.dot, i === currentIndex && styles.dotActive]} />
+                    ))}
+                  </View>
+                )}
+              </View>
 
+              {/* Tan details — bio first, location removed */}
+              <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+                <View style={styles.details}>
+                  {currentBuddy.bio
+                    ? <Text style={styles.bio}>{currentBuddy.bio}</Text>
+                    : <Text style={styles.bioEmpty}>No bio yet. Ready to fish!</Text>
+                  }
                   {currentBuddy.experience_level && (
                     <View style={styles.attributeRow}>
-                      <Text style={styles.attributeLabel}>Experience Level</Text>
+                      <Text style={styles.attributeLabel}>EXPERIENCE LEVEL</Text>
                       <Text style={styles.attributeValue}>{currentBuddy.experience_level}</Text>
                     </View>
                   )}
-
                   {currentBuddy.fishing_type && (
                     <View style={styles.attributeRow}>
-                      <Text style={styles.attributeLabel}>Preferred Environment</Text>
+                      <Text style={styles.attributeLabel}>PREFERRED ENVIRONMENT</Text>
                       <Text style={styles.attributeValue}>{currentBuddy.fishing_type}</Text>
                     </View>
                   )}
-
                   {currentBuddy['has_boat'] && (
                     <View style={styles.attributeRow}>
-                      <Text style={styles.attributeLabel}>Boat Access</Text>
+                      <Text style={styles.attributeLabel}>BOAT ACCESS</Text>
                       <Text style={styles.attributeValue}>Has Boat</Text>
                     </View>
                   )}
                 </View>
               </ScrollView>
-            )}
 
-            <View style={styles.footer}>
-              <Pressable
-                style={[styles.navBtn, currentIndex === 0 && styles.disabled]}
-                onPress={goToPrev}
-                disabled={currentIndex === 0 || cardLoading}
-              >
-                <Text style={styles.navBtnText}>PREV</Text>
-              </Pressable>
-              <Pressable
-                style={styles.chatBtn}
-                onPress={() => handleStartChat(currentBuddy)}
-                disabled={cardLoading}
-              >
-                <Text style={styles.chatBtnText}>MESSAGE</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.navBtn, currentIndex === buddies.length - 1 && styles.disabled]}
-                onPress={goToNext}
-                disabled={currentIndex === buddies.length - 1 || cardLoading}
-              >
-                <Text style={styles.navBtnText}>NEXT</Text>
+              {/* Message */}
+              <View style={styles.footer}>
+                <Pressable
+                  style={[styles.navBtn, currentIndex === 0 && styles.disabled]}
+                  onPress={goToPrev}
+                  disabled={currentIndex === 0}
+                >
+                  <Text style={styles.navBtnText}>‹</Text>
+                </Pressable>
+                <Pressable style={styles.chatBtn} onPress={() => handleStartChat(currentBuddy)}>
+                  <Text style={styles.chatBtnText}>MESSAGE</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.navBtn, currentIndex >= buddies.length && styles.disabled]}
+                  onPress={goToNext}
+                  disabled={currentIndex >= buddies.length}
+                >
+                  <Text style={styles.navBtnText}>›</Text>
+                </Pressable>
+              </View>
+
+            </View>
+          </SwipeableCard>
+        ) : (
+          /* End of deck — swipe right or tap to go back */
+          <SwipeableCard onSwipeLeft={() => {}} onSwipeRight={goToPrev}>
+          <View style={styles.card}>
+            <View style={styles.endDeck}>
+              <Text style={styles.endDeckEmoji}>🎣</Text>
+              <Text style={styles.endDeckTitle}>You've seen everyone!</Text>
+              <Text style={styles.endDeckSub}>Swipe right or tap below to go back.</Text>
+              <Pressable style={styles.rewindBtn} onPress={goToPrev}>
+                <Ionicons name="arrow-undo-outline" size={18} color={FishingTheme.colors.darkGreen} />
+                <Text style={styles.rewindBtnText}>REWIND</Text>
               </Pressable>
             </View>
           </View>
-        ) : (
-          <View style={styles.centered}>
-            <Text style={styles.emptyText}>No buddies found.</Text>
-            <Text style={styles.emptySubtext}>Try broadening your filters.</Text>
-          </View>
+          </SwipeableCard>
         )}
       </View>
 
-      {/* FILTER MODAL */}
-      <Modal visible={isModalVisible} animationType="slide" transparent={true}>
+      {/* Filter modal */}
+      <Modal visible={isModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>FILTERS</Text>
 
-            <Text style={styles.filterLabel}>Distance: {filterDistance} miles</Text>
-            <View style={styles.segmentRow}>
-              {[10, 25, 50, 100].map(d => (
-                <Pressable
-                  key={d}
-                  onPress={() => setFilterDistance(d)}
-                  style={[styles.segBtn, filterDistance === d && styles.segBtnActive]}
-                >
-                  <Text style={[styles.segBtnText, filterDistance === d && styles.segBtnTextActive]}>
-                    {d}mi
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+            <Text style={styles.filterLabel}>Distance</Text>
+            <DistanceSlider value={filterDistance} onChange={setFilterDistance} />
 
             <Text style={styles.filterLabel}>Experience Level</Text>
             <View style={styles.segmentRow}>
               {EXPERIENCE_OPTIONS.map(exp => (
-                <Pressable
-                  key={exp}
-                  onPress={() => setFilterExperience(exp)}
-                  style={[styles.segBtn, styles.expBtn, filterExperience === exp && styles.segBtnActive]}
-                >
+                <Pressable key={exp} onPress={() => setFilterExperience(exp)}
+                  style={[styles.segBtn, filterExperience === exp && styles.segBtnActive]}>
                   <Text style={[styles.segBtnText, filterExperience === exp && styles.segBtnTextActive]}>
                     {exp === 'all' ? 'All' : exp}
                   </Text>
@@ -276,25 +333,27 @@ export default function FeedsScreen() {
               ))}
             </View>
 
-            <View style={styles.toggleRow}>
-              <Text style={styles.filterLabel}>Has Boat</Text>
-              <Switch
-                value={filterHasBoat}
-                onValueChange={setFilterHasBoat}
-                trackColor={{ false: '#ccc', true: FishingTheme.colors.darkGreen }}
-                thumbColor={filterHasBoat ? FishingTheme.colors.tan : '#f4f3f4'}
-              />
+            <Text style={styles.filterLabel}>Fishing Type</Text>
+            <View style={styles.segmentRow}>
+              {FISHING_TYPE_OPTIONS.map(ft => (
+                <Pressable key={ft} onPress={() => setFilterFishingType(ft)}
+                  style={[styles.segBtn, filterFishingType === ft && styles.segBtnActive]}>
+                  <Text style={[styles.segBtnText, filterFishingType === ft && styles.segBtnTextActive]}>
+                    {ft === 'all' ? 'All' : ft === 'freshwater' ? 'Fresh' : 'Salt'}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
+
+            <Text style={styles.filterLabel}>Boat</Text>
+            <Pressable style={[styles.segBtn, { alignSelf: 'flex-start', paddingHorizontal: 16 }, filterHasBoat && styles.segBtnActive]}
+              onPress={() => setFilterHasBoat(p => !p)}>
+              <Text style={[styles.segBtnText, filterHasBoat && styles.segBtnTextActive]}>Has Boat</Text>
+            </Pressable>
 
             <View style={styles.activeFilters}>
               <Text style={styles.activeFiltersLabel}>Active filters:</Text>
-              <Text style={styles.activeFiltersText}>
-                {[
-                  `${filterDistance}mi`,
-                  filterExperience !== 'all' ? filterExperience : null,
-                  filterHasBoat ? 'Has boat' : null
-                ].filter(Boolean).join(' • ') || 'None'}
-              </Text>
+              <Text style={styles.activeFiltersText}>{activeFilterSummary}</Text>
             </View>
 
             <View style={styles.modalActions}>
@@ -313,93 +372,114 @@ export default function FeedsScreen() {
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
+const sliderStyles = StyleSheet.create({
+  container: { marginBottom: 8 },
+  track: { height: 6, backgroundColor: FishingTheme.colors.border, borderRadius: 3, marginHorizontal: SLIDER_TRACK_PADDING, position: 'relative', marginTop: 28, marginBottom: 4 },
+  filled: { position: 'absolute', left: 0, top: 0, height: 6, backgroundColor: FishingTheme.colors.darkGreen, borderRadius: 3 },
+  thumb: { position: 'absolute', top: -10, width: 24, height: 24, borderRadius: 12, backgroundColor: FishingTheme.colors.darkGreen, borderWidth: 3, borderColor: FishingTheme.colors.cream, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 3 },
+  thumbLabel: { position: 'absolute', top: -22, fontSize: 10, fontWeight: '800', color: FishingTheme.colors.darkGreen, width: 60, textAlign: 'center', left: -18 },
+  labels: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: SLIDER_TRACK_PADDING, marginTop: 4 },
+  labelText: { fontSize: 10, color: FishingTheme.colors.text.muted, fontWeight: '600' },
+});
+
+// Drop shadow applied to text via textShadow (no background/overlay)
+const SHADOW = {
+  textShadowColor: 'rgba(0,0,0,0.65)',
+  textShadowOffset: { width: 0, height: 1 },
+  textShadowRadius: 4,
+} as const;
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: FishingTheme.colors.background },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+
   header: { paddingHorizontal: 20, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: FishingTheme.colors.border },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   headerTitle: { fontSize: 24, fontWeight: '900', color: FishingTheme.colors.darkGreen },
   headerSubtitle: { fontSize: 13, color: FishingTheme.colors.text.tertiary, marginTop: 4 },
   filterBtn: { backgroundColor: FishingTheme.colors.tan, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: FishingTheme.colors.border },
   filterBtnText: { fontSize: 11, fontWeight: '800', color: FishingTheme.colors.darkGreen },
+
   main: { flex: 1, padding: 16 },
+
   card: { flex: 1, backgroundColor: FishingTheme.colors.card, borderRadius: 24, overflow: 'hidden', borderWidth: 2, borderColor: FishingTheme.colors.border },
-  photoContainer: { width: '100%', height: 350, position: 'relative' },
+
+  // Photo — full bleed
+  photoContainer: { width: '100%', height: 370, position: 'relative' },
   photo: { width: '100%', height: '100%' },
   placeholder: { width: '100%', height: '100%', backgroundColor: FishingTheme.colors.sageGreen, justifyContent: 'center', alignItems: 'center' },
   placeholderText: { color: 'white', fontWeight: '800' },
-  photoOverlay: {
+
+  // Name + location anchored bottom-left, NO background/shade bar
+  photoTextBlock: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-    paddingTop: 2,
-    paddingBottom: 5,
-    backgroundColor: 'rgba(0, 0, 0, 0.42)',
+    bottom: 14,
+    left: 16,
+    right: 16,
   },
   overlayName: {
     fontSize: 26,
-    fontWeight: '900',
-    color: 'white',
-    marginBottom: 2,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  overlayFieldLabel: {
-    fontSize: 10,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.65)',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginBottom: 1,
+    color: 'white',
+    marginBottom: 3,
+    ...SHADOW,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pinIcon: {
+    marginRight: 3,
+    // Ionicons doesn't support textShadow directly; wrap in shadow view below if needed
   },
   overlayLocation: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: 'white',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    ...SHADOW,
   },
-  details: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 24 },
-  bio: { fontSize: 16, color: FishingTheme.colors.text.primary, marginBottom: 20 },
-  attributeRow: { marginBottom: 16 },
-  attributeLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: FishingTheme.colors.text.tertiary,
-    letterSpacing: 0.9,
-    textTransform: 'uppercase',
-    marginBottom: 3,
-  },
-  attributeValue: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: FishingTheme.colors.text.primary,
-    textTransform: 'capitalize',
-  },
-  footer: { flexDirection: 'row', padding: 16, gap: 10, backgroundColor: FishingTheme.colors.background },
-  navBtn: { flex: 1, padding: 12, borderRadius: 10, backgroundColor: FishingTheme.colors.tan, alignItems: 'center' },
-  navBtnText: { fontWeight: '800', color: FishingTheme.colors.darkGreen },
-  chatBtn: { flex: 2, padding: 12, borderRadius: 10, backgroundColor: FishingTheme.colors.darkGreen, alignItems: 'center' },
-  chatBtnText: { fontWeight: '900', color: 'white' },
-  disabled: { opacity: 0.3 },
+
+  // Swipe progress dots at top of photo
+  dotsRow: { position: 'absolute', top: 12, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 5 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.45)' },
+  dotActive: { backgroundColor: 'white', width: 18, borderRadius: 3 },
+
+  // Tan details section
+  details: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 },
+  bio: { fontSize: 15, color: FishingTheme.colors.text.primary, marginBottom: 16, lineHeight: 22 },
+  bioEmpty: { fontSize: 15, color: FishingTheme.colors.text.muted, marginBottom: 16, fontStyle: 'italic' },
+  attributeRow: { marginBottom: 14 },
+  attributeLabel: { fontSize: 10, fontWeight: '700', color: FishingTheme.colors.text.tertiary, letterSpacing: 0.9, marginBottom: 3 },
+  attributeValue: { fontSize: 15, fontWeight: '600', color: FishingTheme.colors.text.primary, textTransform: 'capitalize' },
+
+  footer: { flexDirection: 'row', padding: 12, gap: 8, backgroundColor: FishingTheme.colors.background, alignItems: 'center' },
+  navBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: FishingTheme.colors.tan, borderWidth: 1, borderColor: FishingTheme.colors.border, alignItems: 'center', justifyContent: 'center' },
+  navBtnText: { fontSize: 22, fontWeight: '300', color: FishingTheme.colors.darkGreen, lineHeight: 26 },
+  chatBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: FishingTheme.colors.darkGreen, alignItems: 'center' },
+  chatBtnText: { fontWeight: '900', color: 'white', fontSize: 14, letterSpacing: 0.5 },
+  disabled: { opacity: 0.25 },
+
   emptyText: { fontSize: 18, fontWeight: '800', color: FishingTheme.colors.darkGreen },
   emptySubtext: { fontSize: 14, color: FishingTheme.colors.text.secondary, marginTop: 8 },
+
+  endDeck: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 12 },
+  endDeckEmoji: { fontSize: 52, marginBottom: 8 },
+  endDeckTitle: { fontSize: 20, fontWeight: '900', color: FishingTheme.colors.darkGreen, textAlign: 'center' },
+  endDeckSub: { fontSize: 14, color: FishingTheme.colors.text.secondary, textAlign: 'center', marginBottom: 8 },
+  rewindBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, backgroundColor: FishingTheme.colors.tan, borderWidth: 1, borderColor: FishingTheme.colors.border },
+  rewindBtnText: { fontSize: 13, fontWeight: '800', color: FishingTheme.colors.darkGreen },
+
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: 'white', padding: 25, borderTopLeftRadius: 30, borderTopRightRadius: 30 },
   modalTitle: { fontSize: 18, fontWeight: '900', color: FishingTheme.colors.darkGreen, marginBottom: 20 },
-  filterLabel: { fontSize: 12, fontWeight: '700', color: FishingTheme.colors.text.tertiary, marginBottom: 10, marginTop: 5 },
-  segmentRow: { flexDirection: 'row', gap: 8, marginBottom: 15 },
+  filterLabel: { fontSize: 12, fontWeight: '700', color: FishingTheme.colors.text.tertiary, marginBottom: 10, marginTop: 12 },
+  segmentRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
   segBtn: { flex: 1, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: FishingTheme.colors.border, alignItems: 'center' },
-  expBtn: { paddingHorizontal: 6 },
   segBtnActive: { backgroundColor: FishingTheme.colors.darkGreen, borderColor: FishingTheme.colors.darkGreen },
   segBtnText: { fontWeight: '700', fontSize: 12, color: FishingTheme.colors.text.secondary },
   segBtnTextActive: { color: 'white' },
-  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, marginTop: 10 },
-  activeFilters: { backgroundColor: FishingTheme.colors.background, padding: 12, borderRadius: 10, marginBottom: 20 },
+  activeFilters: { backgroundColor: FishingTheme.colors.background, padding: 12, borderRadius: 10, marginBottom: 20, marginTop: 16 },
   activeFiltersLabel: { fontSize: 11, fontWeight: '600', color: FishingTheme.colors.text.tertiary, marginBottom: 4 },
   activeFiltersText: { fontSize: 13, fontWeight: '700', color: FishingTheme.colors.darkGreen },
   modalActions: { flexDirection: 'row', gap: 10 },
