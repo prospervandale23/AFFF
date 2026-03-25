@@ -246,6 +246,8 @@ export default function FeedsScreen() {
               {/* Tan details — bio first, location removed */}
               <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
                 <View style={styles.details}>
+                  {/* ── Bio ── */}
+                  <Text style={styles.attributeLabel}>BIO</Text>
                   {currentBuddy.bio
                     ? <Text style={styles.bio}>{currentBuddy.bio}</Text>
                     : <Text style={styles.bioEmpty}>No bio yet. Ready to fish!</Text>
@@ -263,11 +265,23 @@ export default function FeedsScreen() {
                     </View>
                   )}
                   {currentBuddy['has_boat'] && (
-                    <View style={styles.attributeRow}>
-                      <Text style={styles.attributeLabel}>BOAT ACCESS</Text>
-                      <Text style={styles.attributeValue}>Has Boat</Text>
-                    </View>
-                  )}
+                  <View style={styles.attributeRow}>
+                   <Text style={styles.attributeLabel}>BOAT ACCESS</Text>
+                   <Text style={styles.attributeValue}>Has Boat</Text>
+                  </View>
+                )}
+                {currentBuddy['boat_type'] ? (
+                  <View style={styles.attributeRow}>
+                    <Text style={styles.attributeLabel}>BOAT TYPE</Text>
+                    <Text style={styles.attributeValue}>{currentBuddy['boat_type']}</Text>
+                  </View>
+                ) : null}
+                {currentBuddy['boat_length'] ? (
+                  <View style={styles.attributeRow}>
+                    <Text style={styles.attributeLabel}>BOAT LENGTH</Text>
+                    <Text style={styles.attributeValue}>{currentBuddy['boat_length']} ft</Text>
+                  </View>
+                ) : null}
                 </View>
               </ScrollView>
 
@@ -431,7 +445,6 @@ const styles = StyleSheet.create({
   },
   pinIcon: {
     marginRight: 3,
-    // Ionicons doesn't support textShadow directly; wrap in shadow view below if needed
   },
   overlayLocation: {
     fontSize: 13,
@@ -474,10 +487,10 @@ const styles = StyleSheet.create({
   modalContent: { backgroundColor: 'white', padding: 25, borderTopLeftRadius: 30, borderTopRightRadius: 30 },
   modalTitle: { fontSize: 18, fontWeight: '900', color: FishingTheme.colors.darkGreen, marginBottom: 20 },
   filterLabel: { fontSize: 12, fontWeight: '700', color: FishingTheme.colors.text.tertiary, marginBottom: 10, marginTop: 12 },
-  segmentRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
-  segBtn: { flex: 1, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: FishingTheme.colors.border, alignItems: 'center' },
+  segmentRow: { flexDirection: 'row', gap: 6, marginBottom: 4 },
+  segBtn: { flex: 1, paddingVertical: 7, paddingHorizontal: 2, borderRadius: 8, borderWidth: 1, borderColor: FishingTheme.colors.border, alignItems: 'center' },
   segBtnActive: { backgroundColor: FishingTheme.colors.darkGreen, borderColor: FishingTheme.colors.darkGreen },
-  segBtnText: { fontWeight: '700', fontSize: 12, color: FishingTheme.colors.text.secondary },
+  segBtnText: { fontWeight: '700', fontSize: 11, color: FishingTheme.colors.text.secondary },
   segBtnTextActive: { color: 'white' },
   activeFilters: { backgroundColor: FishingTheme.colors.background, padding: 12, borderRadius: 10, marginBottom: 20, marginTop: 16 },
   activeFiltersLabel: { fontSize: 11, fontWeight: '600', color: FishingTheme.colors.text.tertiary, marginBottom: 4 },
