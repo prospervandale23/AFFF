@@ -1,5 +1,6 @@
 import { useFishing } from '@/contexts/FishingContext';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -8,6 +9,7 @@ import {
   Animated,
   Dimensions,
   Image,
+  Linking,
   Modal,
   PanResponder,
   Pressable,
@@ -18,7 +20,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FishingTheme } from '../../constants/FishingTheme';
-import { getPotentialMatches, startConversation, UserProfile } from '../../lib/api';
+import { getPotentialMatches, saveUserLocation, startConversation, UserProfile } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -119,6 +121,10 @@ export default function FeedsScreen() {
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
+  // Location state
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationDenied, setLocationDenied] = useState(false);
+
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [filterDistance, setFilterDistance] = useState(SLIDER_MAX);
   const [filterHasBoat, setFilterHasBoat] = useState(false);
@@ -133,13 +139,51 @@ export default function FeedsScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) { setLoading(false); return; }
       setCurrentUserId(session.user.id);
+
+      // ── Acquire user location ─────────────────────────────────────────
+      let coords = userCoords;
+      if (!coords) {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+
+        if (status === 'granted') {
+          try {
+            const loc = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            });
+            coords = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+            setUserCoords(coords);
+            setLocationDenied(false);
+            // Persist to Supabase so other users can find us
+            await saveUserLocation(session.user.id, coords.lat, coords.lng);
+          } catch (locErr) {
+            console.warn('Could not get position:', locErr);
+          }
+        } else {
+          setLocationDenied(true);
+        }
+      }
+
+      // ── No location → show prompt ─────────────────────────────────────
+      if (!coords) {
+        setBuddies([]);
+        setCurrentIndex(0);
+        setLoading(false);
+        return;
+      }
+
+      // ── Fetch nearby profiles via PostGIS RPC ─────────────────────────
       try {
-        const matches = await getPotentialMatches(session.user.id, {
-          fishingType: filterFishingType !== 'all' ? filterFishingType : undefined,
-          maxDistance: filterDistance < SLIDER_MAX ? filterDistance : undefined,
-          hasBoat: filterHasBoat || undefined,
-          experienceLevel: filterExperience !== 'all' ? filterExperience : undefined,
-        });
+        const matches = await getPotentialMatches(
+          session.user.id,
+          coords.lat,
+          coords.lng,
+          {
+            fishingType: filterFishingType !== 'all' ? filterFishingType : undefined,
+            maxDistance: filterDistance < SLIDER_MAX ? filterDistance : undefined,
+            hasBoat: filterHasBoat || undefined,
+            experienceLevel: filterExperience !== 'all' ? filterExperience : undefined,
+          }
+        );
         setBuddies(matches || []);
       } catch (e) {
         console.warn('API Error:', e);
@@ -151,6 +195,17 @@ export default function FeedsScreen() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleLocationSettingsPrompt() {
+    Alert.alert(
+      'Location Required',
+      'Catch Connect needs your location to find nearby fishing buddies. Please enable location access in Settings.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Open Settings', onPress: () => Linking.openSettings() },
+      ]
+    );
   }
 
   const handleApplyFilters = () => { setIsModalVisible(false); loadInitialData(); };
@@ -182,6 +237,38 @@ export default function FeedsScreen() {
   );
 
   const currentBuddy = buddies[currentIndex];
+
+  // ── Location denied state ───────────────────────────────────────────────────
+  if (locationDenied && !userCoords) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <View>
+              <Text style={styles.headerTitle}>FISHING BUDDIES</Text>
+              <Text style={styles.headerSubtitle}>Location required</Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.locationPrompt}>
+          <View style={styles.locationPromptIcon}>
+            <Ionicons name="location-outline" size={48} color={FishingTheme.colors.darkGreen} />
+          </View>
+          <Text style={styles.locationPromptTitle}>Enable Location</Text>
+          <Text style={styles.locationPromptText}>
+            Catch Connect uses your location to find fishing buddies near you. Without it, we can't show you nearby anglers.
+          </Text>
+          <Pressable style={styles.locationPromptBtn} onPress={handleLocationSettingsPrompt}>
+            <Ionicons name="settings-outline" size={16} color="white" style={{ marginRight: 6 }} />
+            <Text style={styles.locationPromptBtnText}>OPEN SETTINGS</Text>
+          </Pressable>
+          <Pressable style={styles.locationRetryBtn} onPress={loadInitialData}>
+            <Text style={styles.locationRetryBtnText}>RETRY</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -265,23 +352,23 @@ export default function FeedsScreen() {
                     </View>
                   )}
                   {currentBuddy['has_boat'] && (
-                  <View style={styles.attributeRow}>
-                   <Text style={styles.attributeLabel}>BOAT ACCESS</Text>
-                   <Text style={styles.attributeValue}>Has Boat</Text>
-                  </View>
-                )}
-                {currentBuddy['boat_type'] ? (
-                  <View style={styles.attributeRow}>
-                    <Text style={styles.attributeLabel}>BOAT TYPE</Text>
-                    <Text style={styles.attributeValue}>{currentBuddy['boat_type']}</Text>
-                  </View>
-                ) : null}
-                {currentBuddy['boat_length'] ? (
-                  <View style={styles.attributeRow}>
-                    <Text style={styles.attributeLabel}>BOAT LENGTH</Text>
-                    <Text style={styles.attributeValue}>{currentBuddy['boat_length']} ft</Text>
-                  </View>
-                ) : null}
+                    <View style={styles.attributeRow}>
+                      <Text style={styles.attributeLabel}>BOAT ACCESS</Text>
+                      <Text style={styles.attributeValue}>Has Boat</Text>
+                    </View>
+                  )}
+                  {currentBuddy['boat_type'] ? (
+                    <View style={styles.attributeRow}>
+                      <Text style={styles.attributeLabel}>BOAT TYPE</Text>
+                      <Text style={styles.attributeValue}>{currentBuddy['boat_type']}</Text>
+                    </View>
+                  ) : null}
+                  {currentBuddy['boat_length'] ? (
+                    <View style={styles.attributeRow}>
+                      <Text style={styles.attributeLabel}>BOAT LENGTH</Text>
+                      <Text style={styles.attributeValue}>{currentBuddy['boat_length']} ft</Text>
+                    </View>
+                  ) : null}
                 </View>
               </ScrollView>
 
@@ -311,17 +398,17 @@ export default function FeedsScreen() {
         ) : (
           /* End of deck — swipe right or tap to go back */
           <SwipeableCard onSwipeLeft={() => {}} onSwipeRight={goToPrev}>
-          <View style={styles.card}>
-            <View style={styles.endDeck}>
-              <Text style={styles.endDeckEmoji}>🎣</Text>
-              <Text style={styles.endDeckTitle}>You've seen everyone!</Text>
-              <Text style={styles.endDeckSub}>Swipe right or tap below to go back.</Text>
-              <Pressable style={styles.rewindBtn} onPress={goToPrev}>
-                <Ionicons name="arrow-undo-outline" size={18} color={FishingTheme.colors.darkGreen} />
-                <Text style={styles.rewindBtnText}>REWIND</Text>
-              </Pressable>
+            <View style={styles.card}>
+              <View style={styles.endDeck}>
+                <Text style={styles.endDeckEmoji}>🎣</Text>
+                <Text style={styles.endDeckTitle}>You've seen everyone!</Text>
+                <Text style={styles.endDeckSub}>Swipe right or tap below to go back.</Text>
+                <Pressable style={styles.rewindBtn} onPress={goToPrev}>
+                  <Ionicons name="arrow-undo-outline" size={18} color={FishingTheme.colors.darkGreen} />
+                  <Text style={styles.rewindBtnText}>REWIND</Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
           </SwipeableCard>
         )}
       </View>
@@ -482,6 +569,71 @@ const styles = StyleSheet.create({
   endDeckSub: { fontSize: 14, color: FishingTheme.colors.text.secondary, textAlign: 'center', marginBottom: 8 },
   rewindBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, backgroundColor: FishingTheme.colors.tan, borderWidth: 1, borderColor: FishingTheme.colors.border },
   rewindBtnText: { fontSize: 13, fontWeight: '800', color: FishingTheme.colors.darkGreen },
+
+  // Location permission denied prompt
+  locationPrompt: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    gap: 12,
+  },
+  locationPromptIcon: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: FishingTheme.colors.card,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  locationPromptTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: FishingTheme.colors.darkGreen,
+    textAlign: 'center',
+  },
+  locationPromptText: {
+    fontSize: 15,
+    color: FishingTheme.colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 8,
+    maxWidth: 300,
+  },
+  locationPromptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: FishingTheme.colors.darkGreen,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.forestGreen,
+  },
+  locationPromptBtnText: {
+    color: 'white',
+    fontWeight: '800',
+    fontSize: 14,
+    letterSpacing: 0.5,
+  },
+  locationRetryBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: FishingTheme.colors.card,
+    borderWidth: 2,
+    borderColor: FishingTheme.colors.border,
+    marginTop: 4,
+  },
+  locationRetryBtnText: {
+    color: FishingTheme.colors.darkGreen,
+    fontWeight: '800',
+    fontSize: 12,
+    letterSpacing: 0.5,
+  },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: 'white', padding: 25, borderTopLeftRadius: 30, borderTopRightRadius: 30 },

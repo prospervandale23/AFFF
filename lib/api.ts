@@ -15,6 +15,8 @@ export interface UserProfile {
   profile_photo_url: string | null;
   fishing_type: 'freshwater' | 'saltwater' | null;
   tackle_categories: string[] | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 // 2. Define filter options for getPotentialMatches
@@ -25,50 +27,41 @@ interface MatchFilters {
   experienceLevel?: 'Beginner' | 'Intermediate' | 'Advanced';
 }
 
-// 3. Fetch buddies based on filters
+// 3. Fetch buddies using PostGIS-powered RPC
 export async function getPotentialMatches(
-  currentUserId: string, 
+  currentUserId: string,
+  userLat: number,
+  userLng: number,
   filters?: MatchFilters
 ): Promise<UserProfile[]> {
-  // First, get the list of users this person has blocked or been blocked by
-  const blockedIds = await getBlockedAndBlockerIds(currentUserId);
-
-  let query = supabase
-    .from('profiles')
-    .select('*')
-    .neq('id', currentUserId);
-
-  // Exclude blocked users from results
-  if (blockedIds.length > 0) {
-    query = query.not('id', 'in', `(${blockedIds.join(',')})`);
-  }
-
-  if (filters?.fishingType) {
-    query = query.eq('fishing_type', filters.fishingType);
-  }
-
-  if (filters?.hasBoat) {
-    query = query.eq('has_boat', true);
-  }
-
-  if (filters?.experienceLevel) {
-    query = query.eq('experience_level', filters.experienceLevel);
-  }
-
-  // Note: maxDistance filtering requires coordinates + PostGIS or an RPC
-  // For now it's accepted but not applied until you add location data
-
-  const { data, error } = await query.limit(20);
+  const { data, error } = await supabase.rpc('get_nearby_profiles', {
+    caller_id: currentUserId,
+    caller_lat: userLat,
+    caller_lng: userLng,
+    radius_miles: filters?.maxDistance ?? 100,
+    filter_fishing: filters?.fishingType ?? null,
+    filter_has_boat: filters?.hasBoat ?? null,
+    filter_experience: filters?.experienceLevel ?? null,
+  });
 
   if (error) {
-    console.error('Error fetching buddies:', error);
+    console.error('Error fetching nearby profiles:', error);
     return [];
   }
 
-  return data as UserProfile[];
+  return (data ?? []) as UserProfile[];
 }
 
-// 4. Start a conversation (for the Message button)
+// 4. Save the current user's coordinates so others can find them
+export async function saveUserLocation(userId: string, lat: number, lng: number) {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ latitude: lat, longitude: lng })
+    .eq('id', userId);
+  if (error) console.error('Error saving location:', error);
+}
+
+// 5. Start a conversation (for the Message button)
 export async function startConversation(user1Id: string, user2Id: string) {
   // Check if a conversation already exists between these two (in either direction)
   const { data: existing } = await supabase
@@ -94,7 +87,7 @@ export async function startConversation(user1Id: string, user2Id: string) {
   return data;
 }
 
-// 5. Block a user
+// 6. Block a user
 export async function blockUser(blockerId: string, blockedId: string) {
   const { data, error } = await supabase
     .from('blocks')
@@ -106,13 +99,13 @@ export async function blockUser(blockerId: string, blockedId: string) {
   return data;
 }
 
-// 6. Unblock a user
+// 7. Unblock a user
 export async function unblockUser(blockerId: string, blockedId: string) {
   const { error } = await supabase.rpc('unblock_user', { target_id: blockedId });
   if (error) throw error;
 }
 
-// 7. Get all users blocked by the current user (for the blocked users modal)
+// 8. Get all users blocked by the current user (for the blocked users modal)
 export interface BlockedUserInfo {
   blocked_id: string;
   display_name: string | null;
@@ -144,7 +137,7 @@ export async function getBlockedUsers(blockerId: string): Promise<BlockedUserInf
   }));
 }
 
-// 8. Helper: Get all user IDs that the current user has blocked OR has been blocked by
+// 9. Helper: Get all user IDs that the current user has blocked OR has been blocked by
 //    Used to filter feeds and messages
 export async function getBlockedAndBlockerIds(userId: string): Promise<string[]> {
   const { data, error } = await supabase

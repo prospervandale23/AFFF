@@ -1,4 +1,5 @@
 import { FishingTheme } from '@/constants/FishingTheme';
+import * as Location from 'expo-location';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -150,6 +151,23 @@ const ALL_BUOYS: Buoy[] = [
 
 const REGIONS = ['New England', 'Mid-Atlantic', 'Southeast Atlantic', 'Gulf Coast', 'West Coast', 'Pacific Northwest', 'Alaska', 'Hawaii', 'Great Lakes'];
 
+// ─── Find nearest buoy using latitude-corrected Euclidean distance ──────────
+function findClosestBuoy(lat: number, lng: number, buoys: Buoy[]): Buoy {
+  let closest = buoys[0];
+  let minDist = Infinity;
+  const cosLat = Math.cos((lat * Math.PI) / 180);
+  for (const b of buoys) {
+    const dLat = b.lat - lat;
+    const dLon = (b.lon - lng) * cosLat;
+    const dist = dLat * dLat + dLon * dLon;
+    if (dist < minDist) {
+      minDist = dist;
+      closest = b;
+    }
+  }
+  return closest;
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
 
@@ -168,6 +186,28 @@ export default function HomeScreen() {
   const [conditionsLoading, setConditionsLoading] = useState(false);
 
   const mounted = useRef(true);
+
+  // ── Auto-select closest buoy on mount ─────────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return; // stays on default buoy
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        const nearest = findClosestBuoy(
+          loc.coords.latitude,
+          loc.coords.longitude,
+          ALL_BUOYS
+        );
+        setBuoy(nearest);
+      } catch (e) {
+        console.warn('Could not get location for buoy selection:', e);
+        // Falls through — keeps the default Portland, ME buoy
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     mounted.current = true;
