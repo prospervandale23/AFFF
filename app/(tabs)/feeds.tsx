@@ -174,7 +174,6 @@ export default function FeedsScreen() {
       // ── Fetch nearby profiles via PostGIS RPC ─────────────────────────
       try {
         const matches = await getPotentialMatches(
-          session.user.id,
           coords.lat,
           coords.lng,
           {

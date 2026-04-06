@@ -15,8 +15,6 @@ export interface UserProfile {
   profile_photo_url: string | null;
   fishing_type: 'freshwater' | 'saltwater' | null;
   tackle_categories: string[] | null;
-  latitude: number | null;
-  longitude: number | null;
 }
 
 // 2. Define filter options for getPotentialMatches
@@ -29,13 +27,11 @@ interface MatchFilters {
 
 // 3. Fetch buddies using PostGIS-powered RPC
 export async function getPotentialMatches(
-  currentUserId: string,
   userLat: number,
   userLng: number,
   filters?: MatchFilters
 ): Promise<UserProfile[]> {
   const { data, error } = await supabase.rpc('get_nearby_profiles', {
-    caller_id: currentUserId,
     caller_lat: userLat,
     caller_lng: userLng,
     radius_miles: filters?.maxDistance ?? 100,
