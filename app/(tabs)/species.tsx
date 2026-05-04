@@ -3,6 +3,7 @@ import { useFishing } from '@/contexts/FishingContext';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
 import {
+  ActionSheetIOS,
   ActivityIndicator,
   Alert,
   FlatList,
@@ -113,6 +114,24 @@ const saltwaterSpecies: SpeciesInfo[] = [
   },
 ];
 
+function LureThumbnail({ uri }: { uri: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (uri && !failed) {
+    return (
+      <Image
+        source={{ uri }}
+        style={styles.lureThumbnail}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <View style={styles.lureThumbnailPlaceholder}>
+      <Text style={styles.lureThumbnailIcon}>🎣</Text>
+    </View>
+  );
+}
+
 export default function SpeciesScreen() {
   const insets = useSafeAreaInsets();
   const { fishingType, setFishingType } = useFishing();
@@ -196,7 +215,37 @@ export default function SpeciesScreen() {
     }
   }
 
-  async function pickLurePhoto() {
+  function pickLurePhoto() {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ['Cancel', 'Take Photo', 'Choose from Library'], cancelButtonIndex: 0 },
+        (buttonIndex) => {
+          if (buttonIndex === 1) takeLurePhoto();
+          else if (buttonIndex === 2) chooseLureFromLibrary();
+        }
+      );
+    } else {
+      Alert.alert('Lure Photo', 'Choose an option', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Take Photo', onPress: takeLurePhoto },
+        { text: 'Choose from Library', onPress: chooseLureFromLibrary },
+      ]);
+    }
+  }
+
+  async function takeLurePhoto() {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') return;
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) setNewLurePhotoUri(result.assets[0].uri);
+  }
+
+  async function chooseLureFromLibrary() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') return;
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -205,9 +254,7 @@ export default function SpeciesScreen() {
       aspect: [1, 1],
       quality: 0.8,
     });
-    if (!result.canceled && result.assets[0]) {
-      setNewLurePhotoUri(result.assets[0].uri);
-    }
+    if (!result.canceled && result.assets[0]) setNewLurePhotoUri(result.assets[0].uri);
   }
 
   async function handleCreateAndRecommend() {
@@ -478,13 +525,7 @@ export default function SpeciesScreen() {
                 ) : (
                   speciesLures.map((lure) => (
                     <View key={lure.id} style={styles.lureCommunityCard}>
-                      {lure.photo_url ? (
-                        <Image source={{ uri: lure.photo_url }} style={styles.lureThumbnail} />
-                      ) : (
-                        <View style={styles.lureThumbnailPlaceholder}>
-                          <Text style={styles.lureThumbnailIcon}>🎣</Text>
-                        </View>
-                      )}
+                      <LureThumbnail uri={lure.photo_url} />
                       <View style={styles.lureInfo}>
                         <Text style={styles.lureName}>{lure.name}</Text>
                         {lure.price_range ? (
