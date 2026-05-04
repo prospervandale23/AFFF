@@ -202,8 +202,8 @@ export default function WelcomeScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>Catch Connect</Text>
-            <Text style={styles.tagline}>Connect with fishing buddies near you</Text>
+            <Text style={styles.title}>Finnz</Text>
+            <Text style={styles.tagline}>What's in your waters?</Text>
           </View>
 
           <View style={styles.authContainer}>

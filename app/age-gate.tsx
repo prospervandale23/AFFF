@@ -194,7 +194,7 @@ export default function AgeGateScreen() {
           <Text style={styles.deniedIcon}>🚫</Text>
           <Text style={styles.deniedTitle}>Age Requirement Not Met</Text>
           <Text style={styles.deniedMessage}>
-            You must be at least {MIN_AGE} years old to use Catch Connect.
+            You must be at least {MIN_AGE} years old to use Finnz.
           </Text>
         </SafeAreaView>
         <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
@@ -208,7 +208,7 @@ export default function AgeGateScreen() {
         <View style={styles.content}>
           <Text style={styles.heading}>Enter your date of birth</Text>
           <Text style={styles.subheading}>
-            You must be at least {MIN_AGE} years old to use this app
+            You must be at least {MIN_AGE} years old to use Finnz.
           </Text>
 
           {error ? (

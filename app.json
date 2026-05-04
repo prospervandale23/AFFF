@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Catch Connect",
-    "slug": "catch-connect",
+    "name": "Finnz",
+    "slug": "finnz",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "catchconnect",
+    "scheme": "finnz",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
@@ -14,7 +14,7 @@
       "buildNumber": "1",
       "usesAppleSignIn": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Catch Connect uses your location to find nearby fishing buddies and show local fishing conditions.",
+        "NSLocationWhenInUseUsageDescription": "Finnz uses your location to find nearby fishing buddies and show local fishing conditions.",
         "NSCameraUsageDescription": "Take photos of your catches and profile to share with the fishing community.",
         "NSPhotoLibraryUsageDescription": "Choose photos from your library to upload to your profile and share your fishing adventures.",
         "NSPhotoLibraryAddUsageDescription": "Save catch photos to your photo library."
@@ -59,7 +59,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow Catch Connect to use your location to find nearby fishing buddies."
+          "locationWhenInUsePermission": "Allow Finnz to use your location to find nearby fishing buddies."
         }
       ],
       "expo-image-picker",

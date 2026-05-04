@@ -204,7 +204,7 @@ export default function ProfileScreen() {
           onPress: () => {
             Alert.alert(
               'Are you absolutely sure?',
-              'All your data will be permanently deleted. You will need to create a new account to use Catch Connect again.',
+              'All your data will be permanently deleted. You will need to create a new account to use Finns again.',
               [
                 { text: 'Go Back', style: 'cancel' },
                 { text: 'Yes, Delete Everything', style: 'destructive', onPress: executeDeleteAccount },

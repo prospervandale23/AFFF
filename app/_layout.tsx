@@ -66,9 +66,9 @@ export default function RootLayout() {
         />
         <View style={styles.logoOverlay}>
           <View style={styles.logoBox}>
-            <Text style={styles.logoText}>CC</Text>
+            <Text style={styles.logoText}>FZ</Text>
           </View>
-          <Text style={styles.appName}>CATCH CONNECT</Text>
+          <Text style={styles.appName}>Finnz</Text>
         </View>
       </View>
     );

@@ -38,19 +38,45 @@ const SLIDER_TRACK_PADDING = 20;
 
 function DistanceSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const trackWidth = SCREEN_WIDTH - 80 - SLIDER_TRACK_PADDING * 2;
-  const valueToX = (v: number) => ((v - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * trackWidth;
-  const xToValue = (x: number) => {
-    const ratio = Math.max(0, Math.min(1, x / trackWidth));
-    return Math.round(SLIDER_MIN + ratio * (SLIDER_MAX - SLIDER_MIN));
-  };
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (e) => onChange(xToValue(e.nativeEvent.locationX - SLIDER_TRACK_PADDING)),
-    onPanResponderMove: (e) => onChange(xToValue(e.nativeEvent.locationX - SLIDER_TRACK_PADDING)),
-  });
-  const thumbX = valueToX(value);
+
+  // Assign current onChange to a ref on every render so the stable PanResponder
+  // always calls the latest version without needing to be recreated.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  // Records where on the track the gesture started so move events
+  // can add dx on top — giving smooth 1-to-1 thumb tracking.
+  const initialThumbX = useRef(0);
+
+  // PanResponder lives in a ref so it is created exactly once.
+  // Recreating it on every render (which happens on every value change
+  // during a drag) is what caused the previous jitter and dropped inputs.
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+
+      onPanResponderGrant: (e) => {
+        // Jump thumb to wherever the user touched, and remember that spot.
+        const raw = e.nativeEvent.locationX - SLIDER_TRACK_PADDING;
+        const clamped = Math.max(0, Math.min(trackWidth, raw));
+        initialThumbX.current = clamped;
+        const ratio = clamped / trackWidth;
+        onChangeRef.current(Math.round(SLIDER_MIN + ratio * (SLIDER_MAX - SLIDER_MIN)));
+      },
+
+      onPanResponderMove: (_, gs) => {
+        // Add finger delta to the position locked in at grant time.
+        const newX = Math.max(0, Math.min(trackWidth, initialThumbX.current + gs.dx));
+        const ratio = newX / trackWidth;
+        onChangeRef.current(Math.round(SLIDER_MIN + ratio * (SLIDER_MAX - SLIDER_MIN)));
+      },
+    })
+  ).current;
+
+  const thumbX = ((value - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * trackWidth;
   const label = value >= SLIDER_MAX ? '100+ mi' : `${value} mi`;
+
   return (
     <View style={sliderStyles.container} {...panResponder.panHandlers}>
       <View style={[sliderStyles.track, { width: trackWidth + SLIDER_TRACK_PADDING * 2 }]}>
@@ -121,7 +147,6 @@ export default function FeedsScreen() {
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  // Location state
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
 
@@ -140,11 +165,9 @@ export default function FeedsScreen() {
       if (!session?.user) { setLoading(false); return; }
       setCurrentUserId(session.user.id);
 
-      // ── Acquire user location ─────────────────────────────────────────
       let coords = userCoords;
       if (!coords) {
         const { status } = await Location.requestForegroundPermissionsAsync();
-
         if (status === 'granted') {
           try {
             const loc = await Location.getCurrentPositionAsync({
@@ -153,7 +176,6 @@ export default function FeedsScreen() {
             coords = { lat: loc.coords.latitude, lng: loc.coords.longitude };
             setUserCoords(coords);
             setLocationDenied(false);
-            // Persist to Supabase so other users can find us
             await saveUserLocation(session.user.id, coords.lat, coords.lng);
           } catch (locErr) {
             console.warn('Could not get position:', locErr);
@@ -163,7 +185,6 @@ export default function FeedsScreen() {
         }
       }
 
-      // ── No location → show prompt ─────────────────────────────────────
       if (!coords) {
         setBuddies([]);
         setCurrentIndex(0);
@@ -171,7 +192,6 @@ export default function FeedsScreen() {
         return;
       }
 
-      // ── Fetch nearby profiles via PostGIS RPC ─────────────────────────
       try {
         const matches = await getPotentialMatches(
           coords.lat,
@@ -199,7 +219,7 @@ export default function FeedsScreen() {
   function handleLocationSettingsPrompt() {
     Alert.alert(
       'Location Required',
-      'Catch Connect needs your location to find nearby fishing buddies. Please enable location access in Settings.',
+      'Finnz needs your location to find nearby fishing buddies. Please enable location access in Settings.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Open Settings', onPress: () => Linking.openSettings() },
@@ -237,7 +257,6 @@ export default function FeedsScreen() {
 
   const currentBuddy = buddies[currentIndex];
 
-  // ── Location denied state ───────────────────────────────────────────────────
   if (locationDenied && !userCoords) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -255,7 +274,7 @@ export default function FeedsScreen() {
           </View>
           <Text style={styles.locationPromptTitle}>Enable Location</Text>
           <Text style={styles.locationPromptText}>
-            Catch Connect uses your location to find fishing buddies near you. Without it, we can't show you nearby anglers.
+            Finnz uses your location to find fishing buddies near you. Without it, we can't show you nearby anglers.
           </Text>
           <Pressable style={styles.locationPromptBtn} onPress={handleLocationSettingsPrompt}>
             <Ionicons name="settings-outline" size={16} color="white" style={{ marginRight: 6 }} />
@@ -306,7 +325,6 @@ export default function FeedsScreen() {
                   </View>
                 )}
 
-                {/* Name + location — no shade bar, drop shadow only */}
                 <View style={styles.photoTextBlock}>
                   <Text style={styles.overlayName}>
                     {currentBuddy.display_name || 'Anonymous'}
@@ -319,7 +337,6 @@ export default function FeedsScreen() {
                   ) : null}
                 </View>
 
-                {/* Progress dots */}
                 {buddies.length > 1 && (
                   <View style={styles.dotsRow}>
                     {buddies.map((_, i) => (
@@ -329,10 +346,9 @@ export default function FeedsScreen() {
                 )}
               </View>
 
-              {/* Tan details — bio first, location removed */}
+              {/* Details */}
               <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
                 <View style={styles.details}>
-                  {/* ── Bio ── */}
                   <Text style={styles.attributeLabel}>BIO</Text>
                   {currentBuddy.bio
                     ? <Text style={styles.bio}>{currentBuddy.bio}</Text>
@@ -371,7 +387,7 @@ export default function FeedsScreen() {
                 </View>
               </ScrollView>
 
-              {/* Message */}
+              {/* Footer */}
               <View style={styles.footer}>
                 <Pressable
                   style={[styles.navBtn, currentIndex === 0 && styles.disabled]}
@@ -395,7 +411,6 @@ export default function FeedsScreen() {
             </View>
           </SwipeableCard>
         ) : (
-          /* End of deck — swipe right or tap to go back */
           <SwipeableCard onSwipeLeft={() => {}} onSwipeRight={goToPrev}>
             <View style={styles.card}>
               <View style={styles.endDeck}>
@@ -425,7 +440,11 @@ export default function FeedsScreen() {
             <View style={styles.segmentRow}>
               {EXPERIENCE_OPTIONS.map(exp => (
                 <Pressable key={exp} onPress={() => setFilterExperience(exp)}
-                  style={[styles.segBtn, filterExperience === exp && styles.segBtnActive]}>
+                  style={[
+                    styles.segBtn,
+                    exp === 'all' && styles.segBtnAll,
+                    filterExperience === exp && styles.segBtnActive,
+                  ]}>
                   <Text style={[styles.segBtnText, filterExperience === exp && styles.segBtnTextActive]}>
                     {exp === 'all' ? 'All' : exp}
                   </Text>
@@ -437,7 +456,11 @@ export default function FeedsScreen() {
             <View style={styles.segmentRow}>
               {FISHING_TYPE_OPTIONS.map(ft => (
                 <Pressable key={ft} onPress={() => setFilterFishingType(ft)}
-                  style={[styles.segBtn, filterFishingType === ft && styles.segBtnActive]}>
+                  style={[
+                    styles.segBtn,
+                    ft === 'all' && styles.segBtnAll,
+                    filterFishingType === ft && styles.segBtnActive,
+                  ]}>
                   <Text style={[styles.segBtnText, filterFishingType === ft && styles.segBtnTextActive]}>
                     {ft === 'all' ? 'All' : ft === 'freshwater' ? 'Fresh' : 'Salt'}
                   </Text>
@@ -474,7 +497,8 @@ export default function FeedsScreen() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const sliderStyles = StyleSheet.create({
-  container: { marginBottom: 8 },
+  // paddingVertical enlarges the tappable hit area above and below the track.
+  container: { marginBottom: 8, paddingVertical: 16 },
   track: { height: 6, backgroundColor: FishingTheme.colors.border, borderRadius: 3, marginHorizontal: SLIDER_TRACK_PADDING, position: 'relative', marginTop: 28, marginBottom: 4 },
   filled: { position: 'absolute', left: 0, top: 0, height: 6, backgroundColor: FishingTheme.colors.darkGreen, borderRadius: 3 },
   thumb: { position: 'absolute', top: -10, width: 24, height: 24, borderRadius: 12, backgroundColor: FishingTheme.colors.darkGreen, borderWidth: 3, borderColor: FishingTheme.colors.cream, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 3 },
@@ -483,7 +507,6 @@ const sliderStyles = StyleSheet.create({
   labelText: { fontSize: 10, color: FishingTheme.colors.text.muted, fontWeight: '600' },
 });
 
-// Drop shadow applied to text via textShadow (no background/overlay)
 const SHADOW = {
   textShadowColor: 'rgba(0,0,0,0.65)',
   textShadowOffset: { width: 0, height: 1 },
@@ -505,46 +528,21 @@ const styles = StyleSheet.create({
 
   card: { flex: 1, backgroundColor: FishingTheme.colors.card, borderRadius: 24, overflow: 'hidden', borderWidth: 2, borderColor: FishingTheme.colors.border },
 
-  // Photo — full bleed
   photoContainer: { width: '100%', height: 370, position: 'relative' },
   photo: { width: '100%', height: '100%' },
   placeholder: { width: '100%', height: '100%', backgroundColor: FishingTheme.colors.sageGreen, justifyContent: 'center', alignItems: 'center' },
   placeholderText: { color: 'white', fontWeight: '800' },
 
-  // Name + location anchored bottom-left, NO background/shade bar
-  photoTextBlock: {
-    position: 'absolute',
-    bottom: 14,
-    left: 16,
-    right: 16,
-  },
-  overlayName: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: 'white',
-    marginBottom: 3,
-    ...SHADOW,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  pinIcon: {
-    marginRight: 3,
-  },
-  overlayLocation: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: 'white',
-    ...SHADOW,
-  },
+  photoTextBlock: { position: 'absolute', bottom: 14, left: 16, right: 16 },
+  overlayName: { fontSize: 26, fontWeight: '700', color: 'white', marginBottom: 3, ...SHADOW },
+  locationRow: { flexDirection: 'row', alignItems: 'center' },
+  pinIcon: { marginRight: 3 },
+  overlayLocation: { fontSize: 13, fontWeight: '500', color: 'white', ...SHADOW },
 
-  // Swipe progress dots at top of photo
   dotsRow: { position: 'absolute', top: 12, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 5 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.45)' },
   dotActive: { backgroundColor: 'white', width: 18, borderRadius: 3 },
 
-  // Tan details section
   details: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 },
   bio: { fontSize: 15, color: FishingTheme.colors.text.primary, marginBottom: 16, lineHeight: 22 },
   bioEmpty: { fontSize: 15, color: FishingTheme.colors.text.muted, marginBottom: 16, fontStyle: 'italic' },
@@ -569,70 +567,14 @@ const styles = StyleSheet.create({
   rewindBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, backgroundColor: FishingTheme.colors.tan, borderWidth: 1, borderColor: FishingTheme.colors.border },
   rewindBtnText: { fontSize: 13, fontWeight: '800', color: FishingTheme.colors.darkGreen },
 
-  // Location permission denied prompt
-  locationPrompt: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-    gap: 12,
-  },
-  locationPromptIcon: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: FishingTheme.colors.card,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  locationPromptTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: FishingTheme.colors.darkGreen,
-    textAlign: 'center',
-  },
-  locationPromptText: {
-    fontSize: 15,
-    color: FishingTheme.colors.text.secondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 8,
-    maxWidth: 300,
-  },
-  locationPromptBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: FishingTheme.colors.darkGreen,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.forestGreen,
-  },
-  locationPromptBtnText: {
-    color: 'white',
-    fontWeight: '800',
-    fontSize: 14,
-    letterSpacing: 0.5,
-  },
-  locationRetryBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: FishingTheme.colors.card,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.border,
-    marginTop: 4,
-  },
-  locationRetryBtnText: {
-    color: FishingTheme.colors.darkGreen,
-    fontWeight: '800',
-    fontSize: 12,
-    letterSpacing: 0.5,
-  },
+  locationPrompt: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, gap: 12 },
+  locationPromptIcon: { width: 88, height: 88, borderRadius: 44, backgroundColor: FishingTheme.colors.card, borderWidth: 2, borderColor: FishingTheme.colors.border, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  locationPromptTitle: { fontSize: 22, fontWeight: '900', color: FishingTheme.colors.darkGreen, textAlign: 'center' },
+  locationPromptText: { fontSize: 15, color: FishingTheme.colors.text.secondary, textAlign: 'center', lineHeight: 22, marginBottom: 8, maxWidth: 300 },
+  locationPromptBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: FishingTheme.colors.darkGreen, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12, borderWidth: 2, borderColor: FishingTheme.colors.forestGreen },
+  locationPromptBtnText: { color: 'white', fontWeight: '800', fontSize: 14, letterSpacing: 0.5 },
+  locationRetryBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, backgroundColor: FishingTheme.colors.card, borderWidth: 2, borderColor: FishingTheme.colors.border, marginTop: 4 },
+  locationRetryBtnText: { color: FishingTheme.colors.darkGreen, fontWeight: '800', fontSize: 12, letterSpacing: 0.5 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: 'white', padding: 25, borderTopLeftRadius: 30, borderTopRightRadius: 30 },
@@ -640,6 +582,7 @@ const styles = StyleSheet.create({
   filterLabel: { fontSize: 12, fontWeight: '700', color: FishingTheme.colors.text.tertiary, marginBottom: 10, marginTop: 12 },
   segmentRow: { flexDirection: 'row', gap: 6, marginBottom: 4 },
   segBtn: { flex: 1, paddingVertical: 7, paddingHorizontal: 2, borderRadius: 8, borderWidth: 1, borderColor: FishingTheme.colors.border, alignItems: 'center' },
+  segBtnAll: { flex: 0, paddingHorizontal: 8 },
   segBtnActive: { backgroundColor: FishingTheme.colors.darkGreen, borderColor: FishingTheme.colors.darkGreen },
   segBtnText: { fontWeight: '700', fontSize: 11, color: FishingTheme.colors.text.secondary },
   segBtnTextActive: { color: 'white' },
