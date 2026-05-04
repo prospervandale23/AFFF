@@ -1,17 +1,33 @@
 import { FishingTheme } from '@/constants/FishingTheme';
 import { useFishing } from '@/contexts/FishingContext';
-import React, { useState } from 'react';
+import * as ImagePicker from 'expo-image-picker';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   FlatList,
+  Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  View
+  TextInput,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CloseButton } from '../../components/Closebutton';
+import {
+  Lure,
+  LureWithCount,
+  createLureWithPhoto,
+  getLuresForFishingType,
+  getSpeciesLures,
+  recommendLure,
+} from '../../lib/lures';
+import { supabase } from '../../lib/supabase';
 
 interface SpeciesInfo {
   id: string;
@@ -21,20 +37,8 @@ interface SpeciesInfo {
   habitat: string;
   feedingTimes: string[];
   baitfish: string[];
-  lures: LureInfo[];
   seasonality: string;
   bestTimes: string;
-}
-
-interface LureInfo {
-  name: string;
-  type: string;
-  priceRange: string;
-  effectiveness: 'High' | 'Medium' | 'Low';
-  description: string;
-  tips: string;
-  comments?: string;
-  affiliateUrl?: string;
 }
 
 const freshwaterSpecies: SpeciesInfo[] = [
@@ -48,11 +52,6 @@ const freshwaterSpecies: SpeciesInfo[] = [
     baitfish: ['Shad', 'Bluegill', 'Crawfish', 'Worms'],
     seasonality: 'Most active spring through fall, slower in winter',
     bestTimes: 'Early morning and late evening during warm months',
-    lures: [
-      { name: 'Senko Worm', type: 'Soft Plastic', priceRange: '$8-12', effectiveness: 'High', description: 'Versatile wacky rig bait, works year-round', tips: 'Use a slow, twitching retrieve for best results.', comments: 'A favorite among tournament anglers.' },
-      { name: 'Spinnerbait', type: 'Blade Bait', priceRange: '$6-15', effectiveness: 'High', description: 'Great for covering water, works around structure', tips: 'Use in murky water for flash and vibration.', comments: 'Effective in spring and fall.' },
-      { name: 'Crankbait', type: 'Hard Bait', priceRange: '$8-20', effectiveness: 'Medium', description: 'Diving lures that mimic baitfish', tips: 'Use a steady retrieve and vary the depth.', comments: 'Best in cooler months when fish are deeper.' },
-    ]
   },
   {
     id: 'northern-pike',
@@ -64,12 +63,7 @@ const freshwaterSpecies: SpeciesInfo[] = [
     baitfish: ['Perch', 'Suckers', 'Small pike', 'Frogs'],
     seasonality: 'Active year-round, peak activity in spring and fall',
     bestTimes: 'Cooler water periods, overcast days',
-    lures: [
-      { name: 'Spoon', type: 'Metal Lure', priceRange: '$4-10', effectiveness: 'High', description: 'Classic pike lure, flashy and erratic action', tips: 'Use a jerking retrieve to mimic injured baitfish.', comments: 'Effective in weedy areas and around structure.' },
-      { name: 'Large Spinnerbait', type: 'Blade Bait', priceRange: '$8-18', effectiveness: 'High', description: 'Big profile bait for aggressive pike', tips: 'Use in shallow water during warmer months.', comments: 'Effective for targeting pike in warmer conditions.' },
-      { name: 'Jerkbait', type: 'Hard Bait', priceRange: '$12-25', effectiveness: 'Medium', description: 'Suspending lures with erratic action', tips: 'Use a twitching retrieve to trigger strikes.', comments: 'Great for clear water conditions.' },
-    ]
-  }
+  },
 ];
 
 const saltwaterSpecies: SpeciesInfo[] = [
@@ -83,11 +77,6 @@ const saltwaterSpecies: SpeciesInfo[] = [
     baitfish: ['Bunker', 'Herring', 'Eels', 'Sandworms'],
     seasonality: 'Spring through fall migration, winter in deeper water',
     bestTimes: 'Moving water during tide changes',
-    lures: [
-      { name: 'Hogy Heavy Minnow Jig', type: 'Jig', priceRange: '$8-11', effectiveness: 'High', description: 'Small metal jig that imitates rainbait', tips: 'Fish near structure and vary retrieve speed.', comments: 'Great when fish are blitzing on small baitfish and passing up larger offerings' },
-      { name: 'SP Minnow', type: 'Lipped Swimmer', priceRange: '$8-15', effectiveness: 'High', description: 'Realistic baitfish imitation', tips: 'Use a steady retrieve with occasional twitches.', comments: 'Change the pattern to "match the hatch" and mimic local baitfish for best results.' },
-      { name: 'Doc Spook', type: 'Surface Lure', priceRange: '$22-30', effectiveness: 'High', description: 'Large topwater lure fished with a "walk the dog" action', tips: 'Use during low light conditions over shallow structure. If you see fish swirling your lure that wont commit, work it harder!', comments: 'Great for early morning, late evening, or overcast topwater action.' },
-    ]
   },
   {
     id: 'fluke',
@@ -99,11 +88,6 @@ const saltwaterSpecies: SpeciesInfo[] = [
     baitfish: ['Spearing', 'Squid', 'Crabs', 'Killifish'],
     seasonality: 'Late spring through early fall in shallow water',
     bestTimes: 'Incoming tide over sandy flats',
-    lures: [
-      { name: 'Bucktail with Gulp', type: 'Jig Combo', priceRange: '$5-8', effectiveness: 'High', description: 'Bucktail jig tipped with Gulp! soft bait', tips: 'Vary bucktail and gulp color', comments: 'Really targets fluke for some reason.' },
-      { name: 'Bucktail with Squid', type: 'Jig Combo', priceRange: '$6-8', effectiveness: 'High', description: 'Bucktail jig tipped with strip of squid', tips: 'Tip a 1 oz or larger bucktail with a whole squid head to weed out the smaller fish', comments: 'A great example of an "old-school" method that is still effective.' },
-      { name: 'Hogy Sandeel Jig', type: 'Jig', priceRange: '$8-11', effectiveness: 'High', description: 'Classic Hogy sandeel jig... It works!', tips: 'Jig in an area where the bottom is sandy and leave if Sea Robins start to bite.', comments: 'Prone to bycatch, and can snag easily' },
-    ]
   },
   {
     id: 'tautog',
@@ -115,10 +99,6 @@ const saltwaterSpecies: SpeciesInfo[] = [
     baitfish: ['Crabs', 'Mussels', 'Lobsters', 'Peanut-Bunker'],
     seasonality: 'Early spring and late fall in shallow water',
     bestTimes: 'Slack tide around rocky structure',
-    lures: [
-      { name: 'Hi-Lo Rig with crab', type: 'Bait Rig', priceRange: '$2-5', effectiveness: 'High', description: 'Sinker tied below 1-3+ hooks tipped with crab', tips: 'Try to get bait onto a sandy patch near the edge of a reef or by some pilings.', comments: 'Tautog are excellent at stealing bait, set the hook immediately after you feel the first tap.' },
-      { name: 'Jig tipped with crab', type: 'Jig Combo', priceRange: '$3-7', effectiveness: 'High', description: 'Tautog style jig tipped with a crab', tips: 'Use scissors to cut the crab in half, remove legs, and hook through the leg holes for best bait retention.', comments: 'Vary jig color and weight based on current, depth, and water clarity' },
-    ]
   },
   {
     id: 'Scup',
@@ -130,10 +110,7 @@ const saltwaterSpecies: SpeciesInfo[] = [
     baitfish: ['Sand Worms', 'Squid', 'Clams', 'Killifish'],
     seasonality: 'Late spring through early fall in shallow water, especially around sandy bottoms',
     bestTimes: 'Moving tides in the middle of the day',
-    lures: [
-      { name: 'Hi-Lo Rig with sandworm', type: 'Bait Rig', priceRange: '$2-5', effectiveness: 'High', description: 'Sinker tied below two j-hooks tipped with sandworms', tips: 'Try to get bait onto a sandy patch near the edge of a reef or by some pilings.', comments: 'Scup have hard small mouths, so use smaller hooks and let them nibble for a second before the hookset.' },
-    ]
-  }
+  },
 ];
 
 export default function SpeciesScreen() {
@@ -142,21 +119,135 @@ export default function SpeciesScreen() {
   const [selectedSpecies, setSelectedSpecies] = useState<SpeciesInfo | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
+  // Auth
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Community lures
+  const [speciesLures, setSpeciesLures] = useState<LureWithCount[]>([]);
+  const [allLures, setAllLures] = useState<Lure[]>([]);
+  const [loadingLures, setLoadingLures] = useState(false);
+  const [recommending, setRecommending] = useState(false);
+
+  // Recommend dropdown
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  // New lure modal
+  const [newLureModalOpen, setNewLureModalOpen] = useState(false);
+  const [newLureName, setNewLureName] = useState('');
+  const [newLurePrice, setNewLurePrice] = useState('');
+  const [newLurePhotoUri, setNewLurePhotoUri] = useState<string | null>(null);
+  const [submittingLure, setSubmittingLure] = useState(false);
+
   const speciesList = fishingType === 'freshwater' ? freshwaterSpecies : saltwaterSpecies;
   const isFresh = fishingType === 'freshwater';
+  const activeFishingType: 'freshwater' | 'saltwater' = fishingType === 'freshwater' ? 'freshwater' : 'saltwater';
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setCurrentUserId(session?.user?.id ?? null);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (modalVisible && selectedSpecies && currentUserId) {
+      loadLures();
+    }
+    if (!modalVisible) {
+      setSpeciesLures([]);
+      setAllLures([]);
+      setDropdownOpen(false);
+      setNewLureModalOpen(false);
+      setNewLureName('');
+      setNewLurePrice('');
+      setNewLurePhotoUri(null);
+    }
+  }, [modalVisible, selectedSpecies?.id, currentUserId]);
+
+  async function loadLures() {
+    if (!selectedSpecies || !currentUserId) return;
+    setLoadingLures(true);
+    try {
+      const [sl, al] = await Promise.all([
+        getSpeciesLures(selectedSpecies.id, currentUserId),
+        getLuresForFishingType(activeFishingType),
+      ]);
+      setSpeciesLures(sl);
+      setAllLures(al);
+    } catch {
+      // silently fail — empty state handles it
+    } finally {
+      setLoadingLures(false);
+    }
+  }
+
+  async function handleRecommendExisting(lureId: string) {
+    if (!currentUserId || !selectedSpecies || recommending) return;
+    setRecommending(true);
+    try {
+      await recommendLure(lureId, selectedSpecies.id, currentUserId);
+      await loadLures();
+      setDropdownOpen(false);
+    } catch (err: any) {
+      if (err?.code !== '23505') {
+        Alert.alert('Error', 'Could not add recommendation. Please try again.');
+      }
+    } finally {
+      setRecommending(false);
+    }
+  }
+
+  async function pickLurePhoto() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setNewLurePhotoUri(result.assets[0].uri);
+    }
+  }
+
+  async function handleCreateAndRecommend() {
+    if (!newLureName.trim()) {
+      Alert.alert('Missing Info', 'Please enter a lure name.');
+      return;
+    }
+    if (!currentUserId || !selectedSpecies) return;
+    setSubmittingLure(true);
+    try {
+      const lure = await createLureWithPhoto(
+        newLureName,
+        activeFishingType,
+        newLurePrice,
+        newLurePhotoUri,
+        currentUserId
+      );
+      await recommendLure(lure.id, selectedSpecies.id, currentUserId);
+      setNewLureModalOpen(false);
+      setNewLureName('');
+      setNewLurePrice('');
+      setNewLurePhotoUri(null);
+      await loadLures();
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        Alert.alert(
+          'Lure Already Exists',
+          'A lure with that name already exists for this fishing type. Find it in the dropdown to recommend it.'
+        );
+      } else {
+        Alert.alert('Error', 'Could not create lure. Please try again.');
+      }
+    } finally {
+      setSubmittingLure(false);
+    }
+  }
 
   const openSpeciesDetail = (species: SpeciesInfo) => {
     setSelectedSpecies(species);
     setModalVisible(true);
-  };
-
-  const getEffectivenessColor = (effectiveness: string) => {
-    switch (effectiveness) {
-      case 'High': return FishingTheme.colors.status.excellent;
-      case 'Medium': return FishingTheme.colors.status.good;
-      case 'Low': return FishingTheme.colors.status.fair;
-      default: return FishingTheme.colors.text.muted;
-    }
   };
 
   return (
@@ -166,7 +257,6 @@ export default function SpeciesScreen() {
           <Text style={styles.title}>
             {isFresh ? 'FRESHWATER' : 'SALTWATER'} SPECIES GUIDE
           </Text>
-          {/* Salt / Fresh chip toggle */}
           <View style={styles.toggleChips}>
             <Pressable
               style={[styles.chip, isFresh && styles.chipActive]}
@@ -211,7 +301,7 @@ export default function SpeciesScreen() {
         )}
       />
 
-      {/* Species Detail Modal */}
+      {/* ── Species Detail Modal ──────────────────────────────────────────────── */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -259,37 +349,99 @@ export default function SpeciesScreen() {
                 </View>
               </View>
 
+              {/* ── RECOMMENDED LURES ──────────────────────────────────────── */}
               <View style={styles.infoSection}>
                 <Text style={styles.sectionTitle}>RECOMMENDED LURES</Text>
-                {selectedSpecies.lures.map((lure, index) => (
-                  <View key={index} style={styles.lureCard}>
-                    <View style={styles.lureHeader}>
-                      <Text style={styles.lureName}>{lure.name}</Text>
-                      <View style={styles.lureRating}>
-                        <View style={[styles.effectivenessBadge, { backgroundColor: getEffectivenessColor(lure.effectiveness) }]}>
-                          <Text style={styles.effectivenessText}>{lure.effectiveness.toUpperCase()}</Text>
-                        </View>
-                        <Text style={styles.priceText}>{lure.priceRange}</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.lureType}>{lure.type}</Text>
-                    <Text style={styles.lureDescription}>{lure.description}</Text>
-                    {lure.tips && (
-                      <View style={styles.tipsContainer}>
-                        <Text style={styles.tipsLabel}>TIP:</Text>
-                        <Text style={styles.tipsText}>{lure.tips}</Text>
-                      </View>
-                    )}
-                    {lure.comments && (
-                      <View style={styles.commentsContainer}>
-                        <Text style={styles.commentsText}>"{lure.comments}"</Text>
-                      </View>
-                    )}
-                    <Pressable style={styles.buyButton}>
-                      <Text style={styles.buyButtonText}>AVAILABLE SOON</Text>
+
+                {/* Recommend a Lure toggle */}
+                <Pressable
+                  style={styles.recommendBtn}
+                  onPress={() => setDropdownOpen(v => !v)}
+                >
+                  <Text style={styles.recommendBtnText}>RECOMMEND A LURE</Text>
+                  <Text style={styles.recommendBtnArrow}>{dropdownOpen ? '▲' : '▼'}</Text>
+                </Pressable>
+
+                {/* Dropdown */}
+                {dropdownOpen && (
+                  <View style={styles.dropdown}>
+                    {/* Recommend New Lure — always first */}
+                    <Pressable
+                      style={styles.dropdownNewItem}
+                      onPress={() => {
+                        setDropdownOpen(false);
+                        setNewLureModalOpen(true);
+                      }}
+                    >
+                      <Text style={styles.dropdownNewItemText}>+ Recommend New Lure</Text>
                     </Pressable>
+
+                    {allLures.length > 0 && <View style={styles.dropdownDivider} />}
+
+                    {allLures.map((lure) => {
+                      const alreadyRec = speciesLures.find(sl => sl.id === lure.id)?.user_has_recommended ?? false;
+                      return (
+                        <Pressable
+                          key={lure.id}
+                          style={[styles.dropdownItem, alreadyRec && styles.dropdownItemDone]}
+                          onPress={() => !alreadyRec && handleRecommendExisting(lure.id)}
+                          disabled={alreadyRec || recommending}
+                        >
+                          <Text style={[styles.dropdownItemText, alreadyRec && styles.dropdownItemTextDone]}>
+                            {lure.name}
+                          </Text>
+                          {alreadyRec && <Text style={styles.dropdownCheck}>✓</Text>}
+                        </Pressable>
+                      );
+                    })}
+
+                    {allLures.length === 0 && (
+                      <Text style={styles.dropdownEmpty}>
+                        No lures in the pool yet — be the first to add one!
+                      </Text>
+                    )}
                   </View>
-                ))}
+                )}
+
+                {/* Sorted lure cards */}
+                {loadingLures ? (
+                  <ActivityIndicator
+                    color={FishingTheme.colors.darkGreen}
+                    style={{ marginTop: 16 }}
+                  />
+                ) : speciesLures.length === 0 ? (
+                  <View style={styles.noLuresBox}>
+                    <Text style={styles.noLuresText}>No lures recommended yet.</Text>
+                    <Text style={styles.noLuresSubtext}>Tap "Recommend a Lure" to be the first!</Text>
+                  </View>
+                ) : (
+                  speciesLures.map((lure) => (
+                    <View key={lure.id} style={styles.lureCommunityCard}>
+                      {lure.photo_url ? (
+                        <Image source={{ uri: lure.photo_url }} style={styles.lureThumbnail} />
+                      ) : (
+                        <View style={styles.lureThumbnailPlaceholder}>
+                          <Text style={styles.lureThumbnailIcon}>🎣</Text>
+                        </View>
+                      )}
+                      <View style={styles.lureInfo}>
+                        <Text style={styles.lureName}>{lure.name}</Text>
+                        {lure.price_range ? (
+                          <Text style={styles.lurePrice}>{lure.price_range}</Text>
+                        ) : null}
+                        <Text style={styles.lureCount}>
+                          {lure.recommendation_count}{' '}
+                          {lure.recommendation_count === 1 ? 'recommendation' : 'recommendations'}
+                        </Text>
+                      </View>
+                      {lure.user_has_recommended && (
+                        <View style={styles.myRecBadge}>
+                          <Text style={styles.myRecBadgeText}>✓</Text>
+                        </View>
+                      )}
+                    </View>
+                  ))
+                )}
               </View>
 
               <View style={styles.infoSection}>
@@ -300,6 +452,69 @@ export default function SpeciesScreen() {
             </ScrollView>
           </View>
         )}
+      </Modal>
+
+      {/* ── New Lure Modal ────────────────────────────────────────────────────── */}
+      <Modal
+        visible={newLureModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setNewLureModalOpen(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.newLureBackdrop}>
+            <View style={styles.newLureCard}>
+              <View style={styles.newLureHeader}>
+                <Text style={styles.newLureTitle}>RECOMMEND NEW LURE</Text>
+                <CloseButton onPress={() => setNewLureModalOpen(false)} iconName="chevron-down" />
+              </View>
+
+              <ScrollView contentContainerStyle={styles.newLureContent} keyboardShouldPersistTaps="handled">
+                {/* Photo picker */}
+                <Pressable style={styles.photoPickerBtn} onPress={pickLurePhoto}>
+                  {newLurePhotoUri ? (
+                    <Image source={{ uri: newLurePhotoUri }} style={styles.photoPickerPreview} />
+                  ) : (
+                    <Text style={styles.photoPickerLabel}>+ ADD PHOTO{'\n'}(optional)</Text>
+                  )}
+                </Pressable>
+
+                <Text style={styles.newLureLabel}>LURE NAME *</Text>
+                <TextInput
+                  style={styles.newLureInput}
+                  value={newLureName}
+                  onChangeText={setNewLureName}
+                  placeholder="e.g. Hogy Heavy Minnow"
+                  placeholderTextColor={FishingTheme.colors.text.muted}
+                />
+
+                <Text style={styles.newLureLabel}>PRICE RANGE</Text>
+                <TextInput
+                  style={styles.newLureInput}
+                  value={newLurePrice}
+                  onChangeText={setNewLurePrice}
+                  placeholder="e.g. $8-12"
+                  placeholderTextColor={FishingTheme.colors.text.muted}
+                />
+
+                <Pressable
+                  style={[styles.newLureSubmitBtn, submittingLure && styles.newLureSubmitBtnDisabled]}
+                  onPress={handleCreateAndRecommend}
+                  disabled={submittingLure}
+                >
+                  {submittingLure ? (
+                    <ActivityIndicator color={FishingTheme.colors.darkGreen} />
+                  ) : (
+                    <Text style={styles.newLureSubmitText}>ADD & RECOMMEND</Text>
+                  )}
+                </Pressable>
+              </ScrollView>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -312,20 +527,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '800', color: FishingTheme.colors.darkGreen, letterSpacing: 1, flex: 1, marginRight: 10 },
   subtitle: { fontSize: 13, color: FishingTheme.colors.text.tertiary, fontWeight: '500' },
 
-  // Salt/Fresh toggle chips
   toggleChips: { flexDirection: 'row', gap: 6 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: FishingTheme.colors.border,
-    backgroundColor: FishingTheme.colors.card,
-  },
-  chipActive: {
-    backgroundColor: FishingTheme.colors.darkGreen,
-    borderColor: FishingTheme.colors.darkGreen,
-  },
+  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 2, borderColor: FishingTheme.colors.border, backgroundColor: FishingTheme.colors.card },
+  chipActive: { backgroundColor: FishingTheme.colors.darkGreen, borderColor: FishingTheme.colors.darkGreen },
   chipText: { fontSize: 12, fontWeight: '700', color: FishingTheme.colors.text.secondary },
   chipTextActive: { color: FishingTheme.colors.cream, fontWeight: '800' },
 
@@ -342,7 +546,7 @@ const styles = StyleSheet.create({
   feedingTime: { fontSize: 12, color: FishingTheme.colors.darkGreen, fontWeight: '600' },
   tapHint: { fontSize: 11, color: FishingTheme.colors.text.muted, fontWeight: '600', letterSpacing: 0.3 },
 
-  // Modal
+  // Species detail modal
   modalContainer: { flex: 1, backgroundColor: FishingTheme.colors.background },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 2, borderBottomColor: FishingTheme.colors.border },
   modalTitle: { fontSize: 20, fontWeight: '800', color: FishingTheme.colors.darkGreen, flex: 1, letterSpacing: 1 },
@@ -358,20 +562,51 @@ const styles = StyleSheet.create({
   timeChipText: { color: FishingTheme.colors.cream, fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },
   baitChip: { backgroundColor: FishingTheme.colors.card, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 2, borderColor: FishingTheme.colors.border },
   baitChipText: { color: FishingTheme.colors.text.primary, fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },
-  lureCard: { backgroundColor: FishingTheme.colors.card, padding: 16, borderRadius: 12, borderWidth: 2, borderColor: FishingTheme.colors.border, marginBottom: 12 },
-  lureHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-  lureName: { fontSize: 16, fontWeight: '800', color: FishingTheme.colors.darkGreen, flex: 1, letterSpacing: 0.3 },
-  lureRating: { alignItems: 'flex-end', gap: 4 },
-  effectivenessBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  effectivenessText: { color: FishingTheme.colors.cream, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
-  priceText: { color: FishingTheme.colors.text.tertiary, fontSize: 12, fontWeight: '700' },
-  lureType: { fontSize: 12, color: FishingTheme.colors.darkGreen, fontWeight: '700', marginBottom: 6, letterSpacing: 0.3 },
-  lureDescription: { fontSize: 13, color: FishingTheme.colors.text.secondary, lineHeight: 18, marginBottom: 12 },
-  tipsContainer: { backgroundColor: FishingTheme.colors.background, padding: 10, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: FishingTheme.colors.border },
-  tipsLabel: { fontSize: 10, fontWeight: '800', color: FishingTheme.colors.text.tertiary, marginBottom: 4, letterSpacing: 0.5 },
-  tipsText: { fontSize: 12, color: FishingTheme.colors.text.primary, lineHeight: 16, fontStyle: 'italic' },
-  commentsContainer: { paddingLeft: 12, borderLeftWidth: 3, borderLeftColor: FishingTheme.colors.darkGreen, marginBottom: 12 },
-  commentsText: { fontSize: 12, color: FishingTheme.colors.text.secondary, lineHeight: 16, fontStyle: 'italic' },
-  buyButton: { backgroundColor: FishingTheme.colors.darkGreen, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, alignSelf: 'flex-start', borderWidth: 2, borderColor: FishingTheme.colors.forestGreen },
-  buyButtonText: { color: FishingTheme.colors.cream, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+
+  // Recommend a Lure button
+  recommendBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: FishingTheme.colors.darkGreen, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 2, borderColor: FishingTheme.colors.forestGreen },
+  recommendBtnText: { color: FishingTheme.colors.cream, fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
+  recommendBtnArrow: { color: FishingTheme.colors.cream, fontSize: 12, fontWeight: '700' },
+
+  // Dropdown
+  dropdown: { backgroundColor: FishingTheme.colors.card, borderRadius: 10, borderWidth: 2, borderColor: FishingTheme.colors.border, overflow: 'hidden' },
+  dropdownNewItem: { paddingHorizontal: 14, paddingVertical: 13, backgroundColor: FishingTheme.colors.background },
+  dropdownNewItemText: { fontSize: 14, fontWeight: '800', color: FishingTheme.colors.darkGreen, letterSpacing: 0.3 },
+  dropdownDivider: { height: 1, backgroundColor: FishingTheme.colors.border },
+  dropdownItem: { paddingHorizontal: 14, paddingVertical: 13, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: FishingTheme.colors.border },
+  dropdownItemDone: { backgroundColor: 'rgba(114,229,162,0.08)' },
+  dropdownItemText: { fontSize: 14, fontWeight: '600', color: FishingTheme.colors.text.primary },
+  dropdownItemTextDone: { color: FishingTheme.colors.text.muted },
+  dropdownCheck: { fontSize: 14, fontWeight: '800', color: FishingTheme.colors.darkGreen },
+  dropdownEmpty: { paddingHorizontal: 14, paddingVertical: 13, fontSize: 13, color: FishingTheme.colors.text.muted, fontStyle: 'italic' },
+
+  // Community lure cards
+  noLuresBox: { paddingVertical: 20, alignItems: 'center', gap: 6 },
+  noLuresText: { fontSize: 14, fontWeight: '700', color: FishingTheme.colors.text.secondary },
+  noLuresSubtext: { fontSize: 12, color: FishingTheme.colors.text.muted },
+  lureCommunityCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: FishingTheme.colors.card, borderRadius: 12, borderWidth: 2, borderColor: FishingTheme.colors.border, padding: 12, gap: 12 },
+  lureThumbnail: { width: 56, height: 56, borderRadius: 8, borderWidth: 1, borderColor: FishingTheme.colors.border },
+  lureThumbnailPlaceholder: { width: 56, height: 56, borderRadius: 8, backgroundColor: FishingTheme.colors.background, borderWidth: 1, borderColor: FishingTheme.colors.border, justifyContent: 'center', alignItems: 'center' },
+  lureThumbnailIcon: { fontSize: 24 },
+  lureInfo: { flex: 1, gap: 2 },
+  lureName: { fontSize: 15, fontWeight: '800', color: FishingTheme.colors.darkGreen, letterSpacing: 0.2 },
+  lurePrice: { fontSize: 12, fontWeight: '600', color: FishingTheme.colors.text.tertiary },
+  lureCount: { fontSize: 12, fontWeight: '600', color: FishingTheme.colors.text.secondary },
+  myRecBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: FishingTheme.colors.darkGreen, justifyContent: 'center', alignItems: 'center' },
+  myRecBadgeText: { color: FishingTheme.colors.cream, fontSize: 13, fontWeight: '800' },
+
+  // New lure modal
+  newLureBackdrop: { flex: 1, backgroundColor: FishingTheme.colors.overlay, justifyContent: 'center', padding: 16 },
+  newLureCard: { backgroundColor: FishingTheme.colors.cream, borderRadius: 18, overflow: 'hidden', borderWidth: 2, borderColor: FishingTheme.colors.darkGreen, maxHeight: '80%' },
+  newLureHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: FishingTheme.colors.border },
+  newLureTitle: { color: FishingTheme.colors.darkGreen, fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+  newLureContent: { padding: 16, gap: 10 },
+  photoPickerBtn: { alignSelf: 'center', width: 100, height: 100, borderRadius: 12, backgroundColor: FishingTheme.colors.card, borderWidth: 2, borderColor: FishingTheme.colors.border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  photoPickerPreview: { width: 100, height: 100, borderRadius: 12 },
+  photoPickerLabel: { fontSize: 12, fontWeight: '700', color: FishingTheme.colors.text.muted, textAlign: 'center', letterSpacing: 0.3, lineHeight: 18 },
+  newLureLabel: { color: FishingTheme.colors.text.tertiary, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginTop: 4 },
+  newLureInput: { backgroundColor: FishingTheme.colors.card, color: FishingTheme.colors.text.primary, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 2, borderColor: FishingTheme.colors.border, fontSize: 15 },
+  newLureSubmitBtn: { backgroundColor: '#72E5A2', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 8, borderWidth: 2, borderColor: FishingTheme.colors.darkGreen },
+  newLureSubmitBtnDisabled: { opacity: 0.6 },
+  newLureSubmitText: { fontSize: 15, fontWeight: '800', color: FishingTheme.colors.darkGreen, letterSpacing: 0.5 },
 });
