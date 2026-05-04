@@ -310,6 +310,67 @@ export default function SpeciesScreen() {
       >
         {selectedSpecies && (
           <View style={[styles.modalContainer, { paddingTop: insets.top }]}>
+            {/* ── New Lure overlay (inside pageSheet to avoid nested-Modal iOS bug) ── */}
+            {newLureModalOpen && (
+              <KeyboardAvoidingView
+                style={StyleSheet.absoluteFillObject}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                pointerEvents="box-none"
+              >
+                <Pressable
+                  style={styles.newLureBackdrop}
+                  onPress={() => setNewLureModalOpen(false)}
+                >
+                  <Pressable style={styles.newLureCard} onPress={() => {}}>
+                    <View style={styles.newLureHeader}>
+                      <Text style={styles.newLureTitle}>RECOMMEND NEW LURE</Text>
+                      <CloseButton onPress={() => setNewLureModalOpen(false)} iconName="chevron-down" />
+                    </View>
+
+                    <ScrollView contentContainerStyle={styles.newLureContent} keyboardShouldPersistTaps="handled">
+                      <Pressable style={styles.photoPickerBtn} onPress={pickLurePhoto}>
+                        {newLurePhotoUri ? (
+                          <Image source={{ uri: newLurePhotoUri }} style={styles.photoPickerPreview} />
+                        ) : (
+                          <Text style={styles.photoPickerLabel}>+ ADD PHOTO{'\n'}(optional)</Text>
+                        )}
+                      </Pressable>
+
+                      <Text style={styles.newLureLabel}>LURE NAME *</Text>
+                      <TextInput
+                        style={styles.newLureInput}
+                        value={newLureName}
+                        onChangeText={setNewLureName}
+                        placeholder="e.g. Hogy Heavy Minnow"
+                        placeholderTextColor={FishingTheme.colors.text.muted}
+                      />
+
+                      <Text style={styles.newLureLabel}>PRICE RANGE</Text>
+                      <TextInput
+                        style={styles.newLureInput}
+                        value={newLurePrice}
+                        onChangeText={setNewLurePrice}
+                        placeholder="e.g. $8-12"
+                        placeholderTextColor={FishingTheme.colors.text.muted}
+                      />
+
+                      <Pressable
+                        style={[styles.newLureSubmitBtn, submittingLure && styles.newLureSubmitBtnDisabled]}
+                        onPress={handleCreateAndRecommend}
+                        disabled={submittingLure}
+                      >
+                        {submittingLure ? (
+                          <ActivityIndicator color={FishingTheme.colors.darkGreen} />
+                        ) : (
+                          <Text style={styles.newLureSubmitText}>ADD & RECOMMEND</Text>
+                        )}
+                      </Pressable>
+                    </ScrollView>
+                  </Pressable>
+                </Pressable>
+              </KeyboardAvoidingView>
+            )}
+
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{selectedSpecies.name.toUpperCase()}</Text>
               <CloseButton onPress={() => setModalVisible(false)} iconName="chevron-down" />
@@ -454,68 +515,6 @@ export default function SpeciesScreen() {
         )}
       </Modal>
 
-      {/* ── New Lure Modal ────────────────────────────────────────────────────── */}
-      <Modal
-        visible={newLureModalOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setNewLureModalOpen(false)}
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <View style={styles.newLureBackdrop}>
-            <View style={styles.newLureCard}>
-              <View style={styles.newLureHeader}>
-                <Text style={styles.newLureTitle}>RECOMMEND NEW LURE</Text>
-                <CloseButton onPress={() => setNewLureModalOpen(false)} iconName="chevron-down" />
-              </View>
-
-              <ScrollView contentContainerStyle={styles.newLureContent} keyboardShouldPersistTaps="handled">
-                {/* Photo picker */}
-                <Pressable style={styles.photoPickerBtn} onPress={pickLurePhoto}>
-                  {newLurePhotoUri ? (
-                    <Image source={{ uri: newLurePhotoUri }} style={styles.photoPickerPreview} />
-                  ) : (
-                    <Text style={styles.photoPickerLabel}>+ ADD PHOTO{'\n'}(optional)</Text>
-                  )}
-                </Pressable>
-
-                <Text style={styles.newLureLabel}>LURE NAME *</Text>
-                <TextInput
-                  style={styles.newLureInput}
-                  value={newLureName}
-                  onChangeText={setNewLureName}
-                  placeholder="e.g. Hogy Heavy Minnow"
-                  placeholderTextColor={FishingTheme.colors.text.muted}
-                />
-
-                <Text style={styles.newLureLabel}>PRICE RANGE</Text>
-                <TextInput
-                  style={styles.newLureInput}
-                  value={newLurePrice}
-                  onChangeText={setNewLurePrice}
-                  placeholder="e.g. $8-12"
-                  placeholderTextColor={FishingTheme.colors.text.muted}
-                />
-
-                <Pressable
-                  style={[styles.newLureSubmitBtn, submittingLure && styles.newLureSubmitBtnDisabled]}
-                  onPress={handleCreateAndRecommend}
-                  disabled={submittingLure}
-                >
-                  {submittingLure ? (
-                    <ActivityIndicator color={FishingTheme.colors.darkGreen} />
-                  ) : (
-                    <Text style={styles.newLureSubmitText}>ADD & RECOMMEND</Text>
-                  )}
-                </Pressable>
-              </ScrollView>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
     </View>
   );
 }
@@ -596,7 +595,7 @@ const styles = StyleSheet.create({
   myRecBadgeText: { color: FishingTheme.colors.cream, fontSize: 13, fontWeight: '800' },
 
   // New lure modal
-  newLureBackdrop: { flex: 1, backgroundColor: FishingTheme.colors.overlay, justifyContent: 'center', padding: 16 },
+  newLureBackdrop: { flex: 1, backgroundColor: FishingTheme.colors.overlay, justifyContent: 'center', padding: 16, zIndex: 10 },
   newLureCard: { backgroundColor: FishingTheme.colors.cream, borderRadius: 18, overflow: 'hidden', borderWidth: 2, borderColor: FishingTheme.colors.darkGreen, maxHeight: '80%' },
   newLureHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: FishingTheme.colors.border },
   newLureTitle: { color: FishingTheme.colors.darkGreen, fontSize: 16, fontWeight: '800', letterSpacing: 1 },
