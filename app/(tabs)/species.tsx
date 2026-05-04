@@ -238,7 +238,7 @@ export default function SpeciesScreen() {
           'A lure with that name already exists for this fishing type. Find it in the dropdown to recommend it.'
         );
       } else {
-        Alert.alert('Error', 'Could not create lure. Please try again.');
+        Alert.alert('Error', err?.message || err?.error_description || JSON.stringify(err));
       }
     } finally {
       setSubmittingLure(false);
