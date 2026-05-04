@@ -94,19 +94,26 @@ export async function createLureWithPhoto(
     const filePath = `${data.id}/photo.${fileExt}`;
     const response = await fetch(photoUri);
     const buffer = await response.arrayBuffer();
+
     const { error: uploadErr } = await supabase.storage
       .from('lure-photos')
       .upload(filePath, buffer, {
         contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
         upsert: true,
       });
-    if (!uploadErr) {
-      const { data: { publicUrl } } = supabase.storage
-        .from('lure-photos')
-        .getPublicUrl(filePath);
-      await supabase.from('lures').update({ photo_url: publicUrl }).eq('id', data.id);
-      return { ...data, photo_url: publicUrl };
-    }
+    if (uploadErr) throw new Error(`Photo upload failed: ${uploadErr.message}`);
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('lure-photos')
+      .getPublicUrl(filePath);
+
+    const { error: updateErr } = await supabase
+      .from('lures')
+      .update({ photo_url: publicUrl })
+      .eq('id', data.id);
+    if (updateErr) throw new Error(`Photo URL save failed: ${updateErr.message}`);
+
+    return { ...data, photo_url: publicUrl };
   }
 
   return data;
