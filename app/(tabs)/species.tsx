@@ -337,13 +337,7 @@ export default function SpeciesScreen() {
               </View>
             </View>
             <Text style={styles.speciesDescription} numberOfLines={2}>{item.description}</Text>
-            <View style={styles.speciesFooter}>
-              <View style={styles.feedingTimeContainer}>
-                <Text style={styles.feedingLabel}>BEST TIMES:</Text>
-                <Text style={styles.feedingTime}>{item.feedingTimes.slice(0, 2).join(' • ')}</Text>
-              </View>
-              <Text style={styles.tapHint}>TAP FOR DETAILS →</Text>
-            </View>
+            <Text style={styles.tapHint}>TAP FOR DETAILS →</Text>
           </Pressable>
         )}
       />
@@ -571,7 +565,7 @@ const styles = StyleSheet.create({
   chipTextActive: { color: FishingTheme.colors.cream, fontWeight: '800' },
 
   listContainer: { padding: 20, gap: 12 },
-  speciesCard: { backgroundColor: FishingTheme.colors.card, borderRadius: 16, padding: 16, borderWidth: 2, borderColor: FishingTheme.colors.border, ...FishingTheme.shadows.sm },
+  speciesCard: { backgroundColor: FishingTheme.colors.card, borderRadius: 16, paddingVertical: 8, paddingHorizontal: 10, borderWidth: 2, borderColor: FishingTheme.colors.border, ...FishingTheme.shadows.sm },
   speciesHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   speciesName: { fontSize: 18, fontWeight: '800', color: FishingTheme.colors.darkGreen, flex: 1, letterSpacing: 0.3 },
   slotBadge: { backgroundColor: FishingTheme.colors.background, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 2, borderColor: FishingTheme.colors.border },
