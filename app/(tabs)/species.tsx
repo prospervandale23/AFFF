@@ -529,7 +529,9 @@ export default function SpeciesScreen() {
                       <View style={styles.lureInfo}>
                         <Text style={styles.lureName}>{lure.name}</Text>
                         {lure.price_range ? (
-                          <Text style={styles.lurePrice}>{lure.price_range}</Text>
+                          <Text style={styles.lurePrice}>
+                            {lure.price_range.startsWith('$') ? lure.price_range : `$${lure.price_range}`}
+                          </Text>
                         ) : null}
                         <Text style={styles.lureCount}>
                           {lure.recommendation_count}{' '}
@@ -546,11 +548,6 @@ export default function SpeciesScreen() {
                 )}
               </View>
 
-              <View style={styles.infoSection}>
-                <Text style={styles.sectionTitle}>BEST TIMES & CONDITIONS</Text>
-                <Text style={styles.infoText}>{selectedSpecies.bestTimes}</Text>
-                <Text style={styles.infoText}>{selectedSpecies.seasonality}</Text>
-              </View>
             </ScrollView>
           </View>
         )}
@@ -624,7 +621,7 @@ const styles = StyleSheet.create({
   noLuresBox: { paddingVertical: 20, alignItems: 'center', gap: 6 },
   noLuresText: { fontSize: 14, fontWeight: '700', color: FishingTheme.colors.text.secondary },
   noLuresSubtext: { fontSize: 12, color: FishingTheme.colors.text.muted },
-  lureCommunityCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: FishingTheme.colors.card, borderRadius: 12, borderWidth: 2, borderColor: FishingTheme.colors.border, padding: 12, gap: 12 },
+  lureCommunityCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: FishingTheme.colors.card, borderRadius: 12, borderWidth: 2, borderColor: FishingTheme.colors.border, paddingVertical: 8, paddingHorizontal: 10, gap: 8 },
   lureThumbnail: { width: 56, height: 56, borderRadius: 8, borderWidth: 1, borderColor: FishingTheme.colors.border },
   lureThumbnailPlaceholder: { width: 56, height: 56, borderRadius: 8, backgroundColor: FishingTheme.colors.background, borderWidth: 1, borderColor: FishingTheme.colors.border, justifyContent: 'center', alignItems: 'center' },
   lureThumbnailIcon: { fontSize: 24 },
