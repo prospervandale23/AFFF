@@ -528,6 +528,12 @@ export default function ProfileScreen() {
         <Pressable style={styles.deleteAccountButton} onPress={handleDeleteAccount} disabled={deleting}>
           <Text style={styles.deleteAccountText}>{deleting ? 'DELETING...' : 'DELETE ACCOUNT'}</Text>
         </Pressable>
+
+        <Text style={styles.privacyDisclaimer}>
+          <Text style={styles.privacyLink} onPress={() => router.push('/privacy')}>
+            Privacy Policy
+          </Text>
+        </Text>
       </ScrollView>
 
       {/* ── EDIT PROFILE MODAL ─────────────────────────────────────────────── */}
@@ -890,4 +896,6 @@ const styles = StyleSheet.create({
   blockedName: { fontSize: 15, fontWeight: '700', color: FishingTheme.colors.darkGreen },
   unblockBtn: { backgroundColor: FishingTheme.colors.card, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1.5, borderColor: FishingTheme.colors.darkGreen },
   unblockBtnText: { color: FishingTheme.colors.darkGreen, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  privacyDisclaimer: { fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginTop: 16, marginBottom: 8 },
+  privacyLink: { color: FishingTheme.colors.sageGreen, textDecorationLine: 'underline', fontWeight: 'bold' },
 });
