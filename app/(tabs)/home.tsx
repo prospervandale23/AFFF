@@ -1,4 +1,5 @@
 import { FishingTheme } from '@/constants/FishingTheme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -191,9 +192,19 @@ export default function HomeScreen() {
   // ── Auto-select closest buoy on mount ─────────────────────────────────────
   useEffect(() => {
     (async () => {
+      // Restore last-used buoy immediately so we never flash Portland on repeat visits
+      try {
+        const cached = await AsyncStorage.getItem('last_buoy_id');
+        if (cached) {
+          const found = ALL_BUOYS.find(b => b.id === cached);
+          if (found) setBuoy(found);
+        }
+      } catch {}
+
+      // Then refine with live GPS in the background
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') return; // stays on default buoy
+        if (status !== 'granted') return;
         const loc = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
@@ -203,9 +214,9 @@ export default function HomeScreen() {
           ALL_BUOYS
         );
         setBuoy(nearest);
+        await AsyncStorage.setItem('last_buoy_id', nearest.id);
       } catch (e) {
         console.warn('Could not get location for buoy selection:', e);
-        // Falls through — keeps the default Portland, ME buoy
       }
     })();
   }, []);
@@ -622,6 +633,7 @@ export default function HomeScreen() {
                   <Pressable
                     onPress={() => {
                       setBuoy(item.buoy);
+                      AsyncStorage.setItem('last_buoy_id', item.buoy.id);
                       setPickerOpen(false);
                       setSearchQuery('');
                     }}

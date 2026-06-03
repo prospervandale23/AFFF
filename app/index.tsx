@@ -240,10 +240,16 @@ export default function WelcomeScreen() {
             </Pressable>
 
             <Text style={styles.disclaimer}>
-              By registering for this app you agree to our{' '}
+              By registering for this app you agree to our
+            </Text>
+            <Text style={styles.disclaimer}>
+              <Text style={styles.linkText} onPress={() => router.push('/privacy')}>
+                Privacy Policy
+              </Text>
+              {'  |  '}
               <Text style={styles.linkText} onPress={() => router.push('/terms')}>
-                terms and conditions
-              </Text>.
+                Terms & Conditions
+              </Text>
             </Text>
 
           </View>

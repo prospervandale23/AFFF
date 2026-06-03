@@ -67,6 +67,9 @@ export default function ProfileScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteEmailInput, setDeleteEmailInput] = useState('');
+  const [deleteEmailError, setDeleteEmailError] = useState('');
 
   // Boat length input state — kept separate so we can validate on save
   const [boatLengthInput, setBoatLengthInput] = useState('');
@@ -192,7 +195,23 @@ export default function ProfileScreen() {
   }
 
   // ── Delete Account ──────────────────────────────────────────────────────────
-  async function handleDeleteAccount() {
+  function handleDeleteAccount() {
+    setDeleteEmailInput('');
+    setDeleteEmailError('');
+    setDeleteModalOpen(true);
+  }
+
+  async function handleDeleteEmailConfirm() {
+    setDeleteEmailError('');
+    const { data: { session } } = await supabase.auth.getSession();
+    const userEmail = session?.user?.email || '';
+
+    if (deleteEmailInput.trim().toLowerCase() !== userEmail.toLowerCase()) {
+      setDeleteEmailError('Email does not match. Please try again.');
+      return;
+    }
+
+    setDeleteModalOpen(false);
     Alert.alert(
       'Delete Account',
       'This will permanently delete your account, profile, messages, and all associated data. This action cannot be undone.',
@@ -509,6 +528,12 @@ export default function ProfileScreen() {
         <Pressable style={styles.deleteAccountButton} onPress={handleDeleteAccount} disabled={deleting}>
           <Text style={styles.deleteAccountText}>{deleting ? 'DELETING...' : 'DELETE ACCOUNT'}</Text>
         </Pressable>
+
+        <Text style={styles.privacyDisclaimer}>
+          <Text style={styles.privacyLink} onPress={() => router.push('/privacy')}>
+            Privacy Policy
+          </Text>
+        </Text>
       </ScrollView>
 
       {/* ── EDIT PROFILE MODAL ─────────────────────────────────────────────── */}
@@ -674,6 +699,47 @@ export default function ProfileScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* ── DELETE ACCOUNT MODAL ──────────────────────────────────────────── */}
+      <Modal visible={deleteModalOpen} transparent animationType="fade" onRequestClose={() => setDeleteModalOpen(false)}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.settingsBackdrop}>
+            <View style={styles.deleteModalCard}>
+              <Text style={styles.deleteModalTitle}>Confirm Account Deletion</Text>
+              <Text style={styles.deleteModalBody}>
+                To continue, please type your email address to confirm you want to permanently delete your account.
+              </Text>
+
+              <TextInput
+                style={styles.deleteModalInput}
+                value={deleteEmailInput}
+                onChangeText={(v) => { setDeleteEmailInput(v); setDeleteEmailError(''); }}
+                placeholder="Your email address"
+                placeholderTextColor="rgba(0,0,0,0.3)"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+              />
+
+              {deleteEmailError ? (
+                <Text style={styles.deleteModalError}>{deleteEmailError}</Text>
+              ) : null}
+
+              <View style={styles.deleteModalActions}>
+                <Pressable style={styles.deleteModalCancel} onPress={() => setDeleteModalOpen(false)}>
+                  <Text style={styles.deleteModalCancelText}>CANCEL</Text>
+                </Pressable>
+                <Pressable style={styles.deleteModalConfirm} onPress={handleDeleteEmailConfirm}>
+                  <Text style={styles.deleteModalConfirmText}>CONTINUE</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {/* ── BLOCKED USERS MODAL ────────────────────────────────────────────── */}
       <Modal visible={blockedModalOpen} transparent animationType="slide" onRequestClose={() => setBlockedModalOpen(false)}>
         <View style={styles.settingsBackdrop}>
@@ -805,6 +871,17 @@ const styles = StyleSheet.create({
   saveBtnDisabled: { opacity: 0.5 },
   saveBtnText: { color: FishingTheme.colors.cream, fontWeight: '800', letterSpacing: 0.5 },
 
+  deleteModalCard: { backgroundColor: FishingTheme.colors.cream, borderRadius: 18, padding: 24, borderWidth: 2, borderColor: '#CC3333', marginHorizontal: 8 },
+  deleteModalTitle: { fontSize: 18, fontWeight: '800', color: '#CC3333', marginBottom: 12, letterSpacing: 0.5 },
+  deleteModalBody: { fontSize: 14, color: FishingTheme.colors.text.secondary, lineHeight: 20, marginBottom: 16 },
+  deleteModalInput: { backgroundColor: FishingTheme.colors.card, color: FishingTheme.colors.text.primary, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 2, borderColor: FishingTheme.colors.border, fontSize: 15, marginBottom: 8 },
+  deleteModalError: { fontSize: 13, fontWeight: '600', color: '#CC3333', marginBottom: 12 },
+  deleteModalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 8 },
+  deleteModalCancel: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, borderWidth: 2, borderColor: FishingTheme.colors.border, backgroundColor: FishingTheme.colors.card },
+  deleteModalCancelText: { fontSize: 13, fontWeight: '800', color: FishingTheme.colors.text.secondary, letterSpacing: 0.5 },
+  deleteModalConfirm: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, borderWidth: 2, borderColor: '#CC3333', backgroundColor: '#CC3333' },
+  deleteModalConfirmText: { fontSize: 13, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 },
+
   blockedCard: { backgroundColor: FishingTheme.colors.cream, borderRadius: 18, overflow: 'hidden', borderWidth: 2, borderColor: FishingTheme.colors.darkGreen, maxHeight: '70%' },
   blockedLoading: { padding: 40, justifyContent: 'center', alignItems: 'center' },
   blockedEmpty: { padding: 40, justifyContent: 'center', alignItems: 'center' },
@@ -819,4 +896,6 @@ const styles = StyleSheet.create({
   blockedName: { fontSize: 15, fontWeight: '700', color: FishingTheme.colors.darkGreen },
   unblockBtn: { backgroundColor: FishingTheme.colors.card, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1.5, borderColor: FishingTheme.colors.darkGreen },
   unblockBtnText: { color: FishingTheme.colors.darkGreen, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  privacyDisclaimer: { fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginTop: 16, marginBottom: 8 },
+  privacyLink: { color: FishingTheme.colors.sageGreen, textDecorationLine: 'underline', fontWeight: 'bold' },
 });

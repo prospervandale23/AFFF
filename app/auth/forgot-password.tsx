@@ -14,38 +14,30 @@ import {
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 
-export default function EmailSignInScreen() {
+export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [sent, setSent] = useState(false);
 
-  async function handleSignIn() {
+  async function handleReset() {
     setError('');
-    const trimmed = identifier.trim();
+    const trimmed = email.trim().toLowerCase();
 
-    if (!trimmed || !password) {
-      setError('Please enter your email and password.');
+    if (!trimmed) {
+      setError('Please enter your email address.');
       return;
     }
 
     setLoading(true);
-
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email: trimmed.toLowerCase(),
-        password,
-      });
-
-      if (signInError) {
-        setError('Invalid credentials. Please try again.');
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmed);
+      if (resetError) {
+        setError(resetError.message);
         return;
       }
-
-      if (data.session) {
-        router.replace('/(tabs)/home');
-      }
+      setSent(true);
     } catch (err: any) {
       setError(err.message || 'Something went wrong.');
     } finally {
@@ -67,58 +59,56 @@ export default function EmailSignInScreen() {
           </View>
 
           <View style={styles.content}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>
-              Sign in with your email
-            </Text>
+            {sent ? (
+              <>
+                <Text style={styles.title}>Check Your Email</Text>
+                <Text style={styles.subtitle}>
+                  If an account exists for {email.trim().toLowerCase()}, you'll receive a password reset link shortly.
+                </Text>
+                <Pressable style={styles.primaryButton} onPress={() => router.back()}>
+                  <Text style={styles.primaryButtonText}>BACK TO SIGN IN</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={styles.title}>Forgot Password</Text>
+                <Text style={styles.subtitle}>
+                  Enter your email and we'll send you a link to reset your password.
+                </Text>
 
-            {error ? (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
+                {error ? (
+                  <View style={styles.errorBox}>
+                    <Text style={styles.errorText}>{error}</Text>
+                  </View>
+                ) : null}
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                value={identifier}
-                onChangeText={setIdentifier}
-                placeholder="e.g. jake56@fake.com"
-                placeholderTextColor="rgba(245, 239, 224, 0.3)"
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-              />
-            </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Email</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="e.g. jake56@fake.com"
+                    placeholderTextColor="rgba(245, 239, 224, 0.3)"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                  />
+                </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Enter your password"
-                placeholderTextColor="rgba(245, 239, 224, 0.3)"
-                secureTextEntry
-              />
-            </View>
-
-            <Pressable
-              style={[styles.signInButton, loading && styles.signInButtonDisabled]}
-              onPress={handleSignIn}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#1A2E23" />
-              ) : (
-                <Text style={styles.signInButtonText}>SIGN IN</Text>
-              )}
-            </Pressable>
-
-            <Pressable onPress={() => router.push('/auth/forgot-password')} style={styles.forgotButton}>
-              <Text style={styles.forgotText}>Forgot Password?</Text>
-            </Pressable>
+                <Pressable
+                  style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
+                  onPress={handleReset}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#1A2E23" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>SEND RESET LINK</Text>
+                  )}
+                </Pressable>
+              </>
+            )}
           </View>
         </SafeAreaView>
       </KeyboardAvoidingView>
@@ -163,6 +153,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: 'rgba(245, 239, 224, 0.6)',
     marginBottom: 32,
+    lineHeight: 22,
   },
   inputGroup: {
     marginBottom: 20,
@@ -184,31 +175,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
   },
-  signInButton: {
+  primaryButton: {
     backgroundColor: '#72E5A2',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     marginTop: 12,
   },
-  signInButtonDisabled: {
+  primaryButtonDisabled: {
     opacity: 0.6,
   },
-  signInButtonText: {
+  primaryButtonText: {
     fontSize: 17,
     fontWeight: '800',
     color: '#1A2E23',
     letterSpacing: 0.5,
-  },
-  forgotButton: {
-    alignItems: 'center',
-    marginTop: 16,
-    padding: 8,
-  },
-  forgotText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#72E5A2',
   },
   errorBox: {
     backgroundColor: 'rgba(255,59,48,0.15)',

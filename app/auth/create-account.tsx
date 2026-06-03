@@ -178,6 +178,12 @@ export default function CreateAccountScreen() {
                     <Text style={styles.createButtonText}>CREATE ACCOUNT</Text>
                   )}
                 </Pressable>
+
+                <Text style={styles.disclaimer}>
+                  <Text style={styles.linkText} onPress={() => router.push('/privacy')}>
+                    Privacy Policy
+                  </Text>
+                </Text>
               </>
             )}
           </View>
@@ -305,5 +311,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: '#1A2E23',
+  },
+  disclaimer: {
+    fontSize: 13,
+    color: 'rgba(245, 239, 224, 0.7)',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  linkText: {
+    color: '#72E5A2',
+    textDecorationLine: 'underline',
+    fontWeight: 'bold',
   },
 });
