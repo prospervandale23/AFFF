@@ -31,14 +31,24 @@ export default function RootLayout() {
     async function handleUrl(url: string) {
       if (!url.includes('reset-password')) return;
       try {
-        // PKCE flow: Supabase redirects with ?code=...
+        // Primary: direct email template link with token_hash
+        const tokenHash = url.match(/[?&]token_hash=([^&#]+)/)?.[1];
+        if (tokenHash) {
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: decodeURIComponent(tokenHash),
+            type: 'recovery',
+          });
+          if (!error) router.push('/auth/reset-password');
+          return;
+        }
+        // Fallback: PKCE flow with ?code=...
         const code = url.match(/[?&]code=([^&#]+)/)?.[1];
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (!error) router.push('/auth/reset-password');
           return;
         }
-        // Implicit flow: Supabase redirects with #access_token=...
+        // Fallback: implicit flow with #access_token=...
         const accessToken = url.match(/[#&]access_token=([^&]+)/)?.[1];
         const refreshToken = url.match(/[#&]refresh_token=([^&]+)/)?.[1];
         if (accessToken && refreshToken) {
