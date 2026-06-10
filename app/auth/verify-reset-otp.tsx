@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,33 +10,35 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 
-export default function ForgotPasswordScreen() {
+export default function VerifyResetOtpScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const { email } = useLocalSearchParams<{ email: string }>();
+  const [token, setToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  async function handleReset() {
+  async function handleVerify() {
     setError('');
-    const trimmed = email.trim().toLowerCase();
-
-    if (!trimmed) {
-      setError('Please enter your email address.');
+    if (token.trim().length !== 6) {
+      setError('Please enter the 6-digit code from your email.');
       return;
     }
-
     setLoading(true);
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmed);
-      if (resetError) {
-        setError(resetError.message);
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email,
+        token: token.trim(),
+        type: 'recovery',
+      });
+      if (verifyError) {
+        setError(verifyError.message);
         return;
       }
-      router.push({ pathname: '/auth/verify-reset-otp', params: { email: trimmed } });
+      router.replace('/auth/reset-password');
     } catch (err: any) {
       setError(err.message || 'Something went wrong.');
     } finally {
@@ -58,9 +60,9 @@ export default function ForgotPasswordScreen() {
           </View>
 
           <View style={styles.content}>
-            <Text style={styles.title}>Forgot Password</Text>
+            <Text style={styles.title}>Check Your Email</Text>
             <Text style={styles.subtitle}>
-              Enter your email and we'll send you a 6-digit code to reset your password.
+              We sent a 6-digit code to {email}. Enter it below to reset your password.
             </Text>
 
             {error ? (
@@ -70,28 +72,28 @@ export default function ForgotPasswordScreen() {
             ) : null}
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
+              <Text style={styles.label}>Reset Code</Text>
               <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="e.g. jake56@fake.com"
+                style={styles.codeInput}
+                value={token}
+                onChangeText={setToken}
+                placeholder="000000"
                 placeholderTextColor="rgba(245, 239, 224, 0.3)"
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
+                keyboardType="number-pad"
+                maxLength={6}
+                autoFocus
               />
             </View>
 
             <Pressable
               style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
-              onPress={handleReset}
+              onPress={handleVerify}
               disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color="#1A2E23" />
               ) : (
-                <Text style={styles.primaryButtonText}>SEND CODE</Text>
+                <Text style={styles.primaryButtonText}>VERIFY CODE</Text>
               )}
             </Pressable>
           </View>
@@ -116,9 +118,10 @@ const styles = StyleSheet.create({
     fontSize: 14, fontWeight: '700', color: 'rgba(245, 239, 224, 0.8)',
     marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5,
   },
-  input: {
+  codeInput: {
     backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: 16,
-    fontSize: 16, color: '#F5EFE0', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    fontSize: 32, fontWeight: '800', color: '#F5EFE0', borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)', textAlign: 'center', letterSpacing: 12,
   },
   primaryButton: {
     backgroundColor: '#72E5A2', borderRadius: 12, padding: 16,
