@@ -32,7 +32,9 @@ export default function ForgotPasswordScreen() {
 
     setLoading(true);
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmed);
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmed, {
+        redirectTo: 'finnz://reset-password',
+      });
       if (resetError) {
         setError(resetError.message);
         return;

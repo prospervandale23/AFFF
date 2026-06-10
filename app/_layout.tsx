@@ -1,11 +1,13 @@
 // app/_layout.tsx
+import * as Linking from 'expo-linking';
 import * as Notifications from 'expo-notifications';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { FishingProvider } from '../contexts/FishingContext';
 import { NotificationProvider } from '../contexts/NotificationContext';
+import { supabase } from '../lib/supabase';
 
 const splashVideo = require('../assets/videos/splash.mp4');
 
@@ -22,6 +24,39 @@ Notifications.setNotificationHandler({
 
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
+  const router = useRouter();
+
+  // ── Handle password-reset deep links (finnz://reset-password) ─────────────
+  useEffect(() => {
+    async function handleUrl(url: string) {
+      if (!url.includes('reset-password')) return;
+      try {
+        // PKCE flow: Supabase redirects with ?code=...
+        const code = url.match(/[?&]code=([^&#]+)/)?.[1];
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!error) router.push('/auth/reset-password');
+          return;
+        }
+        // Implicit flow: Supabase redirects with #access_token=...
+        const accessToken = url.match(/[#&]access_token=([^&]+)/)?.[1];
+        const refreshToken = url.match(/[#&]refresh_token=([^&]+)/)?.[1];
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: decodeURIComponent(accessToken),
+            refresh_token: decodeURIComponent(refreshToken),
+          });
+          if (!error) router.push('/auth/reset-password');
+        }
+      } catch (e) {
+        console.warn('Deep link error:', e);
+      }
+    }
+
+    Linking.getInitialURL().then(url => { if (url) handleUrl(url); });
+    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+    return () => sub.remove();
+  }, []);
 
   // 1. Request Permission to update the App Icon Badge
   useEffect(() => {
