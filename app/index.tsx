@@ -64,7 +64,7 @@ export default function WelcomeScreen() {
         }
       }
     } catch (error) {
-      console.error('Error checking age/session:', error);
+      if (__DEV__) console.error('Error checking age/session:', error);
     } finally {
       setLoading(false);
     }
@@ -75,7 +75,6 @@ export default function WelcomeScreen() {
       const available = await AppleAuthentication.isAvailableAsync();
       setAppleAuthAvailable(available);
     } catch (error) {
-      console.error('Error checking Apple auth:', error);
       setAppleAuthAvailable(false);
     }
   }
@@ -89,13 +88,10 @@ export default function WelcomeScreen() {
         .single();
 
       if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error('Error checking profile:', fetchError);
         return;
       }
 
       if (!existingProfile) {
-        console.log('Creating profile for new user:', userId);
-        
         const { error: insertError } = await supabase.from('profiles').insert({
           id: userId,
           display_name: displayName || 'New Angler',
@@ -111,16 +107,12 @@ export default function WelcomeScreen() {
           profile_photo_url: null
         });
 
-        if (insertError) {
+        if (insertError && __DEV__) {
           console.error('Error creating profile:', insertError);
-        } else {
-          console.log('Profile created successfully');
         }
-      } else {
-        console.log('Profile already exists for user:', userId);
       }
     } catch (error) {
-      console.error('Error in ensureProfileExists:', error);
+      if (__DEV__) console.error('Error in ensureProfileExists:', error);
     }
   }
 
@@ -135,8 +127,6 @@ export default function WelcomeScreen() {
         rawNonce
       );
       
-      console.log('🍎 Starting Apple Sign In with nonce...');
-      
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
@@ -145,19 +135,11 @@ export default function WelcomeScreen() {
         nonce: hashedNonce,
       });
 
-      console.log('🍎 Apple credential received:');
-      console.log('   - Apple User ID:', credential.user);
-      console.log('   - Email:', credential.email);
-
       const { data, error } = await supabase.auth.signInWithIdToken({
         provider: 'apple',
         token: credential.identityToken!,
         nonce: rawNonce,
       });
-
-      console.log('🔐 Supabase auth result:');
-      console.log('   - Supabase User ID:', data.user?.id);
-      console.log('   - Email:', data.user?.email);
 
       if (error) throw error;
       
@@ -172,8 +154,7 @@ export default function WelcomeScreen() {
       router.replace('/(tabs)/home');
     } catch (error: any) {
       if (error.code !== 'ERR_REQUEST_CANCELED') {
-        console.error('🍎 Apple Sign In Error:', error);
-        setErrorMessage(`Apple Error: ${error.message}`);
+        setErrorMessage(`Apple Sign In failed. Please try again.`);
       }
     } finally {
       setSigningIn(false);

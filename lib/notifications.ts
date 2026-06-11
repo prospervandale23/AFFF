@@ -5,7 +5,6 @@ import { supabase } from './supabase';
 
 export async function registerForPushNotifications(): Promise<string | null> {
   if (!Device.isDevice) {
-    console.log('Push notifications require a physical device');
     return null;
   }
 
@@ -18,7 +17,6 @@ export async function registerForPushNotifications(): Promise<string | null> {
   }
 
   if (finalStatus !== 'granted') {
-    console.log('Push notification permission denied');
     return null;
   }
 
@@ -44,7 +42,7 @@ export async function savePushToken(userId: string, token: string) {
     .update({ push_token: token })
     .eq('id', userId);
 
-  if (error) console.error('Error saving push token:', error);
+  if (error && __DEV__) console.error('Error saving push token:', error);
 }
 
 export async function sendPushNotification(

@@ -35,7 +35,9 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+generate-apple-secret.js
 
 # typescript
 *.tsbuildinfo
