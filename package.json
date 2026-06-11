@@ -43,7 +43,7 @@
     "expo-location": "~56.0.17",
     "expo-notifications": "~56.0.17",
     "expo-router": "~56.2.10",
-    "expo-splash-screen": "^55.0.21",
+    "expo-splash-screen": "~56.0.10",
     "expo-status-bar": "~56.0.4",
     "expo-symbols": "~56.0.6",
     "expo-system-ui": "~56.0.5",
@@ -65,11 +65,11 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
-    "@types/react": "~19.0.10",
+    "@types/react": "~19.2.14",
     "eslint": "^9.25.0",
-    "eslint-config-expo": "~9.2.0",
-    "expo-dev-client": "^56.0.20",
-    "typescript": "~5.8.3"
+    "eslint-config-expo": "~56.0.4",
+    "expo-dev-client": "~56.0.20",
+    "typescript": "~6.0.3"
   },
   "private": true
 }
