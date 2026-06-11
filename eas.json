@@ -46,7 +46,8 @@
     "production": {
       "ios": {
         "appleId": "pvandale766@g.rwu.edu",
-        "appleTeamId": "77J6U6F554"
+        "appleTeamId": "77J6U6F554",
+        "ascAppId": "6755828161"
       },
       "android": {
         "track": "production",
