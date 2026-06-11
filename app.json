@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "finnz",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.pvandale766.catchconnect",
@@ -30,7 +29,6 @@
       },
       "package": "com.pvandale766.catchconnect",
       "versionCode": 1,
-      "edgeToEdgeEnabled": true,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
