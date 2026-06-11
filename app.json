@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pvandale766.finnz",
+      "bundleIdentifier": "com.pvandale766.catchconnect",
       "buildNumber": "1",
       "usesAppleSignIn": true,
       "infoPlist": {
@@ -28,7 +28,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0B1220"
       },
-      "package": "com.pvandale766.finnz",
+      "package": "com.pvandale766.catchconnect",
       "versionCode": 1,
       "edgeToEdgeEnabled": true,
       "permissions": [
