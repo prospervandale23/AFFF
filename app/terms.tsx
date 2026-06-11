@@ -75,20 +75,20 @@ const styles = StyleSheet.create({
 // --- YOUR TEXT CONTENT ---
 const TERMS_AND_CONDITIONS_TEXT = `
 1. Acceptance of Terms
-By downloading or using the app, you agree to our Terms and Conditions outlined below.
+By downloading and or using the app, you agree to the Terms and Conditions outlined below.
 
 2. Account Registration
-You need to register for an account to access the app. By verifying your age. You are responsible for maintaining the confidentiality of your account credentials (passwords, emails, etc.) and for all actions that occur under your account.
+Account Registration is required to use Finnz. Verifying your age confirms you're eligible for registration. You are responsible for maintaining the confidentiality of your account credentials (passwords, emails, etc.) and for all actions that occur under your personal account.
 
 3. Privacy Policy
-We care about data privacy and security. Finnz will not share your personal information with third parties without your consent, except as required by law should a criminal investigation or legal process which results from a users' actions demand it. By using the app, you agree to be bound by our Privacy Policy.
+Finnz will not share your personal information with third parties, unless required to do so in response to an investigation and or legal proceeding resulting from a users' actions. By using the app, you agree to be bound by our Privacy Policy outlined in the profiles tab of Finnz.
 
 4. User Generated Content
-Users may post photos of catches. Finnz will not share the emails, usernames, photos, or other personal information of any user with third parties without their explicit consent. Finnz is not responsible for the recycling and or collection of user generated content by other users within the app. Use discretion with the information and photos you upload to your profile and the messages you send to other users. 
+Users may post photos of catches. Finnz will not share the emails, usernames, photos, or other personal information of any user with third parties without their explicit consent. Finnz is not responsible for the recycling and or collection of user generated content by other users within the app. Use discretion with the information and photos you upload to your Finnz profile and the messages you send to other users. 
 
 5. Safety Disclaimer
-Fishing involves physical activity and potential risks, as does meeting in person with strangers. Finnz is not liable for any injuries or accidents that may occur while fishing or meeting in-person with other users, regardless of the circumstances. 
+Fishing involves physical activity and the potential for serious bodily harm and or death. As does meeting in person with strangers you met on the internet. Finnz is not liable for any damages to property, injury, or death that may occur while fishing or meeting in-person with other Finnz users or any other persons for that matter, regardless of the circumstances. 
 
 6. Changes to Terms
-We reserve the right to modify these Terms and Conditions at any time. We will notify users of any changes by updating the Terms on this page. Your continued use of the app after any changes constitutes acceptance of the new Terms.
+Finnz reserves the right to modify the Terms and Conditions outlined above at any time. We will notify users of any changes to our Terms and Conditions by sending an email to the address associated with your account. Your continued use of the app after changes are made to the Terms and Conditions constitutes your acceptance of the new Terms and Conditions.
 `;
