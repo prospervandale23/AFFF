@@ -177,7 +177,6 @@ export default function WelcomeScreen() {
         player={player}
         contentFit="cover"
         nativeControls={false}
-        allowsFullscreen={false}
       />
 
       <SafeAreaView style={styles.container}>

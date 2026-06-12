@@ -472,7 +472,7 @@ export default function SpeciesScreen() {
                       style={styles.dropdownNewItem}
                       onPress={() => {
                         setDropdownOpen(false);
-                        setNewLureModalOpen(true);
+                        setTimeout(() => setNewLureModalOpen(true), 100);
                       }}
                     >
                       <Text style={styles.dropdownNewItemText}>+ Recommend New Lure</Text>
