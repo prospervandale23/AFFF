@@ -1,7 +1,8 @@
 {
   "cli": {
     "version": ">= 5.0.0",
-    "appVersionSource": "local"
+    "appVersionSource": "local",
+    "autoIncrement": true
   },
   "build": {
     "development-simulator": {
