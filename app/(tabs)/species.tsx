@@ -1,7 +1,7 @@
 import { FishingTheme } from '@/constants/FishingTheme';
 import { useFishing } from '@/contexts/FishingContext';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActionSheetIOS,
   ActivityIndicator,
@@ -354,7 +354,7 @@ export default function SpeciesScreen() {
             {/* ── New Lure overlay (inside pageSheet to avoid nested-Modal iOS bug) ── */}
             {newLureModalOpen && (
               <KeyboardAvoidingView
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 pointerEvents="box-none"
               >
