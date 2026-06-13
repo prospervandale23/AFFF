@@ -354,7 +354,7 @@ export default function SpeciesScreen() {
             {/* ── New Lure overlay (inside pageSheet to avoid nested-Modal iOS bug) ── */}
             {newLureModalOpen && (
               <KeyboardAvoidingView
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 pointerEvents="box-none"
               >
