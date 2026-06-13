@@ -243,7 +243,7 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
   container: { flex: 1 },
-  backgroundVideo: { ...StyleSheet.absoluteFillObject },
+  backgroundVideo: { ...StyleSheet.absoluteFill },
   content: { flex: 1, justifyContent: 'center', padding: 20 },
   header: { alignItems: 'center', marginBottom: 60 },
   title: { fontSize: 48, fontWeight: '800', color: '#FFFFFF', marginBottom: 8, letterSpacing: 2 },
