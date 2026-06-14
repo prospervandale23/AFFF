@@ -1,6 +1,7 @@
 import { Stack, useRouter } from 'expo-router';
 import React from 'react';
-import { SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import WebView from 'react-native-webview';
 import { PRIVACY_POLICY_HTML } from '../constants/privacyPolicyHtml';
 

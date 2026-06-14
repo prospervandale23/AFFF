@@ -4,12 +4,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Pressable,
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
