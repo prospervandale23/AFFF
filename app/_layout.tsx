@@ -2,7 +2,7 @@
 import * as Linking from 'expo-linking';
 import * as Notifications from 'expo-notifications';
 import { Stack, useRouter } from 'expo-router';
-import { useEventListener, useVideoPlayer, VideoView } from 'expo-video';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { FishingProvider } from '../contexts/FishingContext';
@@ -91,9 +91,12 @@ export default function RootLayout() {
     return () => clearTimeout(timer);
   }, []);
 
-  useEventListener(player, 'playToEnd', () => {
-    setShowSplash(false);
-  });
+  useEffect(() => {
+    const subscription = player.addListener('playToEnd', () => {
+      setShowSplash(false);
+    });
+    return () => subscription?.remove();
+  }, [player]);
 
   if (showSplash) {
     return (
